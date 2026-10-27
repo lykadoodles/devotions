@@ -4,7 +4,7 @@ import {
   BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES,
 } from './plan.js';
 import { state, load, save, reset, isDone, setDone, streak, longestStreak, isLit, LIT } from './store.js';
-import { passage, prefetch, savedCount, testKey, hasBuiltInKey, verseText, verseTextNLT, wantsNLT, NLT_NOTICE, WEB_NOTICE } from './text.js';
+import { passage, prefetch, savedCount, testKey, hasBuiltInKey, verseText, verseTextOnline, wantsOnline, NOTICES, TRANSLATIONS, TRANSLATION_ORDER, current as currentTranslation } from './text.js';
 import { rhemaRange, dailyIndex, randomIndex } from './rhema.js';
 import { loadDevo, devoFor } from './devo.js';
 import { openingFor, closingPrayer } from './prayers.js';
@@ -461,10 +461,10 @@ async function loadRhema(idx = currentRhemaIndex()) {
   };
   rEl().textContent = ref;
   // 1) instant, offline text
-  try { show(await verseText(range, { nlt: false })); } catch (e) { console.warn('rhema web', e); }
+  try { show(await verseText(range, { online: false })); } catch (e) { console.warn('rhema web', e); }
   // 2) upgrade to NLT when it arrives
-  if (wantsNLT()) {
-    try { show(await verseTextNLT(range)); } catch (e) { console.warn('rhema nlt', e); }
+  if (wantsOnline()) {
+    try { show(await verseTextOnline(range)); } catch (e) { console.warn('rhema nlt', e); }
   }
 }
 
@@ -498,10 +498,9 @@ async function viewReader(track, key) {
       <div class="row">
         <button class="icon-btn" data-action="back" aria-label="Back">${icon('back')}</button>
         <div class="reader-title"><div class="track">${t.name}</div><div class="ref">${esc(ref)}</div></div>
-        <button class="icon-btn" data-action="font-" aria-label="Smaller text">${icon('aminus')}</button>
-        <button class="icon-btn" data-action="font+" aria-label="Larger text">${icon('aplus')}</button>
+        <button class="tr-chip" data-action="reading-sheet" aria-label="Translation and text options">${currentTranslation()}<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
         ${musicBtn()}
-        <button class="icon-btn readfont-btn" data-action="readfont" aria-label="Switch reading font">${state.readFont === 'sans' ? '<span style="font-family:var(--serif);font-size:19px;font-weight:600">Aa</span>' : '<span style="font-family:var(--sans);font-size:18px;font-weight:800">Aa</span>'}</button>
+        <button class="icon-btn" data-action="reading-sheet" aria-label="Text options"><span style="font-family:var(--serif);font-size:19px;font-weight:600">Aa</span></button>
       </div>
       <div class="progress" id="rprog"></div>
     </div>`;
@@ -529,8 +528,8 @@ async function viewReader(track, key) {
       <button class="btn primary block mark-btn ${done ? 'done' : ''}" data-mark="${track}|${key}">
         ${done ? `${icon('check').replace('<svg', '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="3"')} Read` : 'Mark as read'}
       </button>
-      <p class="help" style="text-align:center">${esc(contextLine)} · ${res.translation || ''}</p>
-      <p class="copyright">${res.translation === 'NLT' ? NLT_NOTICE : WEB_NOTICE}</p>
+      <p class="help" style="text-align:center">${esc(contextLine)} · <button class="link-btn" data-action="reading-sheet">${res.translation || ''} · change</button></p>
+      <p class="copyright">${NOTICES[res.translation] || ''}</p>
     </div>`;
   window.scrollTo(0, 0);
   const prog = document.getElementById('rprog');
@@ -540,6 +539,41 @@ async function viewReader(track, key) {
   };
   onScroll();
   window.onscroll = onScroll;
+}
+
+// ---------- reading options sheet ----------
+function openReadingSheet() {
+  const o = document.createElement('div');
+  o.className = 'overlay sheet-overlay';
+  const render = () => {
+    o.innerHTML = `<div class="sheet" role="dialog" aria-label="Reading options">
+      <div class="sheet-grip"></div>
+      <div class="eyebrow">Translation</div>
+      <div class="tr-grid">
+        ${TRANSLATION_ORDER.map((code) => `<button class="tr-opt ${currentTranslation() === code ? 'on' : ''}" data-tr="${code}">
+          <b>${code}</b><span>${TRANSLATIONS[code].name.replace(' Translation', '').replace(' Version', '')}</span>${TRANSLATIONS[code].online ? '<i>online</i>' : '<i>offline</i>'}
+        </button>`).join('')}
+      </div>
+      <div class="sheet-row"><span class="eyebrow">Text size</span>
+        <div class="seg-ctl"><button data-sz="-">A−</button><button disabled style="min-width:58px">${Math.round(state.fontScale * 100)}%</button><button data-sz="+">A+</button></div></div>
+      <div class="sheet-row"><span class="eyebrow">Font</span>
+        <div class="seg-ctl"><button class="${state.readFont !== 'sans' ? 'on' : ''}" data-rf="serif" style="font-family:var(--serif)">Serif</button><button class="${state.readFont === 'sans' ? 'on' : ''}" data-rf="sans">Sans</button></div></div>
+      <button class="btn primary block" data-done style="margin-top:14px">Done</button>
+    </div>`;
+  };
+  render();
+  document.body.appendChild(o);
+  let changedTr = false;
+  const close = () => { o.remove(); if (changedTr) route(); };
+  o.addEventListener('click', (e) => {
+    if (e.target === o || e.target.closest('[data-done]')) return close();
+    const tr = e.target.closest('[data-tr]');
+    if (tr) { state.translation = tr.dataset.tr; save(); changedTr = true; haptic(); render(); return; }
+    const sz = e.target.closest('[data-sz]');
+    if (sz) { state.fontScale = Math.max(0.8, Math.min(1.6, +(state.fontScale + (sz.dataset.sz === '+' ? 0.1 : -0.1)).toFixed(2))); save(); applyTheme(); render(); return; }
+    const rf = e.target.closest('[data-rf]');
+    if (rf) { state.readFont = rf.dataset.rf; save(); applyTheme(); render(); }
+  });
 }
 
 // ---------- guided prayer ----------
@@ -706,15 +740,19 @@ function viewSettings() {
     <div class="section">
       <div class="section-head"><div class="h2">Reading</div></div>
       <div class="list">
-        <div class="item"><div class="t"><b>Translation</b><span>${state.translation === 'NLT' ? 'New Living Translation' : 'World English Bible (offline)'}</span></div>
-          ${seg('translation', state.translation, [['NLT', 'NLT'], ['WEB', 'WEB']])}</div>
+        ${TRANSLATION_ORDER.map((code) => `
+        <button class="item tr-row ${currentTranslation() === code ? 'on' : ''}" data-set="translation" data-val="${code}">
+          <span class="radio"></span>
+          <span class="t"><b>${TRANSLATIONS[code].name} <span class="tr-code">${code}</span></b><span>${TRANSLATIONS[code].desc}${TRANSLATIONS[code].online ? ' · online' : ''}</span></span>
+        </button>`).join('')}
+        ${['NLT', 'ESV'].map((k) => `
         <div class="item" style="flex-direction:column;align-items:stretch">
-          <div class="t"><b>NLT API key</b><span>${state.nltKey ? 'Your key saved ✓' : hasBuiltInKey() ? 'Built into this app ✓ (optional override)' : 'Needed to read in the NLT'}</span></div>
+          <div class="t"><b>${k} API key</b><span>${state[k.toLowerCase() + 'Key'] ? 'Your key saved ✓' : hasBuiltInKey(k) ? 'Built into this app ✓ (optional override)' : `Needed to read in the ${k}`}</span></div>
           <div style="display:flex;gap:8px;margin-top:10px">
-            <input class="field" style="margin:0" type="password" id="nltkey" placeholder="Paste your key" value="${esc(state.nltKey)}" autocomplete="off">
-            <button class="btn small" data-action="save-key">Save</button>
+            <input class="field" style="margin:0" type="password" id="key-${k}" placeholder="Paste your ${k} key" value="${esc(state[k.toLowerCase() + 'Key'] || '')}" autocomplete="off">
+            <button class="btn small" data-action="save-key" data-kind="${k}">Save</button>
           </div>
-        </div>
+        </div>`).join('')}
         <div class="item"><div class="t"><b>Reading font</b><span>${state.readFont === 'sans' ? 'Sans-serif (Manrope)' : 'Serif (Literata)'}</span></div>
           ${seg('readFont', state.readFont || 'serif', [['serif', 'Serif'], ['sans', 'Sans']])}</div>
         <div class="item"><div class="t"><b>Text size</b><span>${Math.round(state.fontScale * 100)}%</span></div>
@@ -723,7 +761,7 @@ function viewSettings() {
           ${seg('theme', state.theme, [['system', 'Auto'], ['dark', 'Dark'], ['light', 'Light']])}</div>
       </div>
       <p class="help" id="saved-note">Checking saved passages…</p>
-      <p class="help">The NLT is copyrighted, so it’s loaded from Tyndale’s official NLT API. Get a free key at <a href="https://api.nlt.to" target="_blank" rel="noopener">api.nlt.to</a>. Passages you’ve opened are saved on your phone for offline reading.</p>
+      <p class="help">BSB, KJV and WEB are public domain and built in, so they work offline. NLT and ESV are copyrighted and load from their publishers’ official services. Free keys: <a href="https://api.nlt.to" target="_blank" rel="noopener">api.nlt.to</a> (NLT) and <a href="https://api.esv.org" target="_blank" rel="noopener">api.esv.org</a> (ESV). By Crossway’s terms, only a few days of ESV readings are kept on your phone.</p>
     </div>
 
     <div class="section">
@@ -762,8 +800,10 @@ function viewSettings() {
 async function fillSavedNote() {
   const el = document.getElementById('saved-note');
   if (!el) return;
-  const n = await savedCount();
-  el.textContent = n ? `${n} NLT chapter${n === 1 ? '' : 's'} saved on this phone for offline reading. The next 7 days download automatically when you're online.` : 'NLT passages are saved on this phone as you read, and the next 7 days download automatically when you’re online.';
+  const t = currentTranslation();
+  if (!TRANSLATIONS[t].online) { el.textContent = `${TRANSLATIONS[t].name} is built into the app and works fully offline.`; return; }
+  const n = await savedCount(t);
+  el.textContent = n ? `${n} ${t} passage${n === 1 ? '' : 's'} saved on this phone for offline reading. The next 7 days download automatically when you're online.` : 'NLT passages are saved on this phone as you read, and the next 7 days download automatically when you’re online.';
 }
 
 function viewWelcome() {
@@ -910,6 +950,7 @@ document.addEventListener('click', async (e) => {
     save(); syncMusicButtons();
     if (location.hash.startsWith('#/settings')) route();
   }
+  if (a === 'reading-sheet') openReadingSheet();
   if (a === 'pray-next') viewPrayer.next?.();
   if (a === 'music-pref') {
     state.music ||= { on: false, vol: 0.6 };
@@ -964,15 +1005,17 @@ document.addEventListener('click', async (e) => {
     confetti(.6); haptic('success');
   }
   if (a === 'save-key') {
-    const key = document.getElementById('nltkey').value.trim();
+    const kind = el.dataset.kind || 'NLT';
+    const field = kind.toLowerCase() + 'Key';
+    const key = document.getElementById(`key-${kind}`).value.trim();
     el.textContent = '…';
-    if (!key) { state.nltKey = ''; save(); route(); return; }
+    if (!key) { state[field] = ''; save(); route(); return; }
     try {
-      await testKey(key);
-      state.nltKey = key; state.translation = 'NLT'; save(); toast('NLT key works ✓'); route();
+      await testKey(key, kind);
+      state[field] = key; state.translation = kind; save(); toast(`${kind} key works ✓`); route();
     } catch (err) {
-      state.nltKey = key; save();
-      toast(navigator.onLine ? 'Key saved, but the NLT test failed. Check the key.' : 'Saved. We’ll test it when you’re online.');
+      state[field] = key; save();
+      toast(navigator.onLine ? `Key saved, but the ${kind} test failed. Check the key.` : 'Saved. We’ll test it when you’re online.');
       route();
     }
   }

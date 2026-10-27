@@ -12,6 +12,7 @@ const DEFAULTS = () => ({
   startDate: today(),
   translation: 'NLT',
   nltKey: '',
+  esvKey: '',
   theme: 'system',
   fontScale: 1,
   readFont: 'serif',
@@ -52,7 +53,7 @@ export function save() {
 
 export function reset(keepSettings = true) {
   const keep = keepSettings
-    ? { name: state.name, translation: state.translation, nltKey: state.nltKey, theme: state.theme,
+    ? { name: state.name, translation: state.translation, nltKey: state.nltKey, esvKey: state.esvKey, theme: state.theme,
         fontScale: state.fontScale, readFont: state.readFont, music: state.music, reminder: state.reminder, onboarded: state.onboarded }
     : {};
   Object.assign(state, DEFAULTS(), keep);

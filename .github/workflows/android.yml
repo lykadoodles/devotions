@@ -31,16 +31,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Add NLT API key
+      - name: Add Bible API keys
         env:
           NLT_API_KEY: ${{ secrets.NLT_API_KEY }}
+          ESV_API_KEY: ${{ secrets.ESV_API_KEY }}
         run: |
-          if [ -n "$NLT_API_KEY" ]; then
-            printf "export const NLT_KEY = '%s';\n" "$NLT_API_KEY" > www/js/config.js
-            echo "NLT key added"
-          else
-            echo "::warning::NLT_API_KEY secret not set; the app will ask for a key in Settings"
-          fi
+          printf "export const NLT_KEY = '%s';\nexport const ESV_KEY = '%s';\n" "$NLT_API_KEY" "$ESV_API_KEY" > www/js/config.js
+          [ -n "$NLT_API_KEY" ] && echo "NLT key added" || echo "::warning::NLT_API_KEY secret not set"
+          [ -n "$ESV_API_KEY" ] && echo "ESV key added" || echo "ESV_API_KEY secret not set (optional)"
 
       - name: Create Android project
         run: |

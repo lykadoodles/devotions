@@ -23,7 +23,21 @@ That's about 15 minutes a day. The OT, NT and Psalms portions are balanced by ve
 - **Daily reminder** notification listing that day's passages
 - Dark and light themes, adjustable text size, offline reading
 
-## NLT text
+## Translations
+
+Readers can switch anytime from the reader's translation chip or Settings:
+
+| | Source | Offline |
+|---|---|---|
+| **NLT** | Tyndale NLT API (key) | saved as you read + next 7 days |
+| **ESV** | Crossway ESV API (key, `ESV_API_KEY` secret) | up to 500 verses, per Crossway's terms |
+| **BSB** | built in (public domain, CC0) | ✓ |
+| **KJV** | built in (public domain) | ✓ |
+| **WEB** | built in (public domain) | ✓ |
+
+BSB and KJV come from [scrollmapper/bible_databases](https://github.com/scrollmapper/bible_databases); rebuild with `node scripts/build-translations.mjs <dir with BSB.json, KJV.json>`.
+
+### NLT text
 
 The New Living Translation is copyrighted by Tyndale House, so the app loads it through Tyndale's official **NLT API**:
 

@@ -49,7 +49,9 @@ BEAUTIFUL AND PRIVATE
 • Works offline: upcoming readings are saved on your phone
 • No account, no ads, no tracking. Your progress stays on your phone.
 
-Scripture in the New Living Translation (NLT) and the World English Bible (WEB).
+FIVE TRANSLATIONS
+• Switch anytime: NLT, ESV, Berean Standard Bible (BSB), King James Version (KJV) and World English Bible (WEB)
+• BSB, KJV and WEB are built in and work fully offline
 
 **App icon**: `icon-512.png`
 **Feature graphic**: `feature-graphic-1024x500.png`
@@ -76,12 +78,12 @@ Scripture in the New Living Translation (NLT) and the World English Bible (WEB).
 ## Data safety form
 - Does your app collect or share any of the required user data types? **No**
   - Progress, name and settings are stored only on the device and never sent off it, so they don't count as "collected".
-  - NLT requests send only a passage reference and the API key, with no user data.
+  - NLT/ESV requests send only a passage reference and an API key, with no user data.
 - Is all user data encrypted in transit? **Yes** (HTTPS)
 - Do you provide a way for users to request data deletion? Not applicable (no data collected). Uninstalling removes everything.
 
 ## Permissions (for any declarations Play asks about)
-- INTERNET: load NLT passages
+- INTERNET: load NLT/ESV passages
 - POST_NOTIFICATIONS: optional daily reading reminder
 - RECEIVE_BOOT_COMPLETED: restore the reminder after restart
 - VIBRATE: haptic feedback when finishing a reading
