@@ -49,6 +49,16 @@ jobs:
             --iconBackgroundColor '#14110f' --iconBackgroundColorDark '#14110f' \
             --splashBackgroundColor '#14110f' --splashBackgroundColorDark '#14110f'
           npx cap sync android
+          # Daily reminders don't need exact alarms; drop the permission so
+          # Play doesn't require an exact-alarm declaration.
+          python3 - <<'PY'
+          p = 'android/app/src/main/AndroidManifest.xml'
+          s = open(p).read()
+          if 'xmlns:tools' not in s:
+              s = s.replace('<manifest ', '<manifest xmlns:tools="http://schemas.android.com/tools" ', 1)
+          s = s.replace('</manifest>', '    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />\n</manifest>')
+          open(p, 'w').write(s)
+          PY
 
       - name: Restore signing key
         env:
@@ -95,20 +105,23 @@ jobs:
           }
           GRADLE
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease bundleRelease --no-daemon
           cp app/build/outputs/apk/release/app-release.apk ../Lamp.apk
+          cp app/build/outputs/bundle/release/app-release.aab ../Lamp.aab
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lamp-apk
-          path: Lamp.apk
+          name: Lamp-builds
+          path: |
+            Lamp.apk
+            Lamp.aab
 
       - name: Publish to the "latest" release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest Lamp.apk \
+          gh release create latest Lamp.apk Lamp.aab \
             --title "Lamp (build ${{ github.run_number }})" \
-            --notes "Download **Lamp.apk** on your Android phone and open it to install. Built from ${GITHUB_SHA::7}." \
+            --notes "**Lamp.apk**: install directly on an Android phone. **Lamp.aab**: upload to Google Play Console. Built from ${GITHUB_SHA::7}." \
             --latest

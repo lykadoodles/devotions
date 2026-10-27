@@ -184,7 +184,8 @@ svg { display: block; }
 .bigstat { display: flex; align-items: center; gap: 18px; }
 .bigring { position: relative; width: 124px; height: 124px; flex-shrink: 0; }
 .bigring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-.bigring circle { fill: none; stroke-width: 11; stroke-linecap: round; }
+.bigring circle { fill: none; stroke-width: 7; stroke-linecap: round; }
+.bigring svg { overflow: visible; }
 .bigring .val { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 1px; font-family: var(--serif); font-weight: 600; font-size: 28px; }
 .bigring .val small { font-size: 14px; color: var(--muted); }
 .bars { display: grid; gap: 14px; }
