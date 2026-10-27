@@ -4,7 +4,7 @@ import {
   BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES,
 } from './plan.js';
 import { state, load, save, reset, isDone, setDone, streak, longestStreak, isLit, LIT } from './store.js';
-import { passage, prefetch, testKey, NLT_NOTICE, WEB_NOTICE } from './text.js';
+import { passage, prefetch, testKey, hasBuiltInKey, NLT_NOTICE, WEB_NOTICE } from './text.js';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -514,7 +514,7 @@ function viewSettings() {
         <div class="item"><div class="t"><b>Translation</b><span>${state.translation === 'NLT' ? 'New Living Translation' : 'World English Bible (offline)'}</span></div>
           ${seg('translation', state.translation, [['NLT', 'NLT'], ['WEB', 'WEB']])}</div>
         <div class="item" style="flex-direction:column;align-items:stretch">
-          <div class="t"><b>NLT API key</b><span>${state.nltKey ? 'Saved ✓' : 'Needed to read in the NLT'}</span></div>
+          <div class="t"><b>NLT API key</b><span>${state.nltKey ? 'Your key saved ✓' : hasBuiltInKey() ? 'Built into this app ✓ (optional override)' : 'Needed to read in the NLT'}</span></div>
           <div style="display:flex;gap:8px;margin-top:10px">
             <input class="field" style="margin:0" type="password" id="nltkey" placeholder="Paste your key" value="${esc(state.nltKey)}" autocomplete="off">
             <button class="btn small" data-action="save-key">Save</button>

@@ -31,6 +31,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Add NLT API key
+        env:
+          NLT_API_KEY: ${{ secrets.NLT_API_KEY }}
+        run: |
+          if [ -n "$NLT_API_KEY" ]; then
+            printf "export const NLT_KEY = '%s';\n" "$NLT_API_KEY" > www/js/config.js
+            echo "NLT key added"
+          else
+            echo "::warning::NLT_API_KEY secret not set; the app will ask for a key in Settings"
+          fi
+
       - name: Create Android project
         run: |
           npx cap add android

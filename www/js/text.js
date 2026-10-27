@@ -4,6 +4,11 @@
 // used offline or when no NLT key is set.
 import { META, chapters, bookName } from './plan.js';
 import { state } from './store.js';
+import { NLT_KEY } from './config.js';
+
+// The user's own key (Settings) wins; otherwise the key built into the app.
+export const nltKey = () => state.nltKey || NLT_KEY;
+export const hasBuiltInKey = () => !!NLT_KEY;
 
 const webCache = {};
 async function webBook(b) {
@@ -94,7 +99,7 @@ async function fetchNLT(ch) {
   const ref = nltRef(ch);
   const hit = await cached(ref);
   if (hit) return hit;
-  const url = `${API}?ref=${encodeURIComponent(ref)}&version=NLT&key=${encodeURIComponent(state.nltKey)}`;
+  const url = `${API}?ref=${encodeURIComponent(ref)}&version=NLT&key=${encodeURIComponent(nltKey())}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(res.status === 401 || res.status === 403 ? 'Your NLT key was rejected' : `NLT server error ${res.status}`);
   const html = cleanNLT(await res.text());
@@ -114,7 +119,7 @@ export const WEB_NOTICE = 'World English Bible (WEB). Public domain.';
 // Returns { html, translation, note }
 export async function passage(range) {
   if (state.translation === 'NLT') {
-    if (!state.nltKey) {
+    if (!nltKey()) {
       return { html: await renderWEB(range), translation: 'WEB', note: 'Add your free NLT key in Settings to read in the NLT. Showing the World English Bible for now.' };
     }
     try {
@@ -128,7 +133,7 @@ export async function passage(range) {
 
 // Warm the NLT cache for upcoming readings so they work offline.
 export async function prefetch(ranges) {
-  if (state.translation !== 'NLT' || !state.nltKey || !navigator.onLine) return;
+  if (state.translation !== 'NLT' || !nltKey() || !navigator.onLine) return;
   for (const r of ranges) for (const ch of chapters(r)) { try { await fetchNLT(ch); } catch { return; } }
 }
 

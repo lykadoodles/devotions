@@ -28,7 +28,8 @@ That's about 15 minutes a day. The OT, NT and Psalms portions are balanced by ve
 The New Living Translation is copyrighted by Tyndale House, so the app loads it through Tyndale's official **NLT API**:
 
 1. Get a free API key at <https://api.nlt.to>
-2. In the app, open **Settings → NLT API key**, paste it, and tap **Save**
+2. Add it as a repository secret named `NLT_API_KEY` (**Settings → Secrets and variables → Actions**). Every APK built after that has the NLT turned on. The key is added at build time, so it never appears in this public repo.
+3. Or paste a key in the app under **Settings → NLT API key**. That overrides the built-in one.
 
 Passages you've opened are saved on your phone so they work offline. Until a key is added, or when the app is offline with no saved copy, it shows the public-domain **World English Bible**, which is built into the app.
 
