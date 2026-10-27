@@ -5,20 +5,31 @@
 **App name** (max 30): `Lamp: Bible in a Year`
 
 **Short description** (max 80):
-`Read the whole Bible in a year with 4 short daily readings, streaks & badges.`
+`Daily Bible devotion: guided prayer, 4 readings, takeaways & streaks. 1 year.`
 
 **Full description** (max 4000):
 
 Your word is a lamp to my feet, and a light for my path. (Psalm 119:105)
 
-Lamp helps you read the whole Bible in one year, about 15 minutes a day. Every day you get four short portions:
+Lamp is a complete daily devotion that takes you through the whole Bible in one year, about 15 minutes a day.
 
-• Old Testament: about two chapters
-• New Testament: about one chapter
-• Psalms: a few verses, so all 150 Psalms are spread across the year
+A GUIDED DAILY DEVOTION
+• Begin with prayer: a guided opening prayer asking God for wisdom and to lead you into all truth, with a moment of silence
+• Four short readings: Old Testament, New Testament, Psalms and Proverbs
+• After each reading: a key takeaway and one simple way to apply it today
+• End with prayer: a closing prayer built from the day's readings
+• Soft piano music while you read and pray (optional)
+
+THE WHOLE BIBLE IN A YEAR
+• Old Testament: about two chapters a day
+• New Testament: about one chapter a day
+• Psalms: a few verses a day, so all 150 are spread across the year
 • Proverbs: the chapter that matches today's date, so you read Proverbs 12 times a year
+• Each day's readings are balanced by length, so no day is much heavier than another
 
-Each day's readings are balanced by length, so no day is much heavier than another.
+RHEMA FOR TODAY
+• A fresh encouraging verse every day
+• Shuffle for another, or share it with a friend
 
 STAY MOTIVATED
 • A streak flame that grows the longer you keep reading
@@ -30,20 +41,19 @@ SEE YOUR PROGRESS
 • See what percentage of the Bible you've read
 • A bookshelf of all 66 books that fills in as you go
 • A heatmap of every day you've read
-• Proverbs progress beads, twelve per year
-• 20 badges to earn: finish the Torah, the Gospels, Paul's letters, all the Psalms and more
+• 20 badges: finish the Torah, the Gospels, Paul's letters, all the Psalms, Proverbs 12 times and more
 
 BEAUTIFUL AND PRIVATE
-• Clean, distraction-free reading with adjustable text size
+• Clean reading with adjustable text size and a serif or sans-serif font
 • Dark and light themes
-• Works offline
+• Works offline: upcoming readings are saved on your phone
 • No account, no ads, no tracking. Your progress stays on your phone.
 
 Scripture in the New Living Translation (NLT) and the World English Bible (WEB).
 
 **App icon**: `icon-512.png`
 **Feature graphic**: `feature-graphic-1024x500.png`
-**Phone screenshots**: `screenshot-1-today.png` … `screenshot-5-badges.png` (1080×1920)
+**Phone screenshots**: `screenshot-1-today.png` … `screenshot-5-celebrate.png` (1080×1920)
 
 ## Store settings
 - **App category**: Books & Reference (or Lifestyle)
