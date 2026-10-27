@@ -68,19 +68,46 @@ function nltRef(ch) {
   return ch.full ? `${name} ${ch.c}` : `${name} ${ch.c}:${ch.v1}-${ch.v2}`;
 }
 
+// Saved NLT passages live in the app's private storage on the phone
+// (Capacitor Filesystem), so they survive restarts and WebView cache clears.
+// In a plain browser we fall back to the Cache API / localStorage.
+const FS = () => window.Capacitor?.isNativePlatform?.() ? window.Capacitor.Plugins?.Filesystem : null;
+const memo = new Map();
+const fileFor = (ref) => `nlt/${ref.replace(/[^a-z0-9]+/gi, '_')}.html`;
+
 async function cached(ref) {
+  if (memo.has(ref)) return memo.get(ref);
+  const fs = FS();
+  if (fs) {
+    try {
+      const r = await withTimeout(fs.readFile({ path: fileFor(ref), directory: 'DATA', encoding: 'utf8' }), 2000);
+      if (r?.data) { memo.set(ref, r.data); return r.data; }
+    } catch {}
+  }
   try {
     const hit = await withTimeout((async () => {
       const c = await caches.open(CACHE); const r = await c.match(`/nlt/${encodeURIComponent(ref)}`); return r ? r.text() : null;
     })(), 1500);
-    if (hit) return hit;
+    if (hit) { memo.set(ref, hit); return hit; }
   } catch {}
-  try { return localStorage.getItem(`nlt:${ref}`); } catch {}
+  try { const v = localStorage.getItem(`nlt:${ref}`); if (v) { memo.set(ref, v); return v; } } catch {}
   return null;
 }
 async function store(ref, html) {
+  memo.set(ref, html);
+  const fs = FS();
+  if (fs) {
+    try { await withTimeout(fs.writeFile({ path: fileFor(ref), data: html, directory: 'DATA', encoding: 'utf8', recursive: true }), 3000); return; } catch {}
+  }
   try { await withTimeout((async () => { const c = await caches.open(CACHE); await c.put(`/nlt/${encodeURIComponent(ref)}`, new Response(html)); })(), 2000); return; } catch {}
   try { localStorage.setItem(`nlt:${ref}`, html); } catch {}
+}
+
+// How many passages are saved on this device (for Settings)
+export async function savedCount() {
+  const fs = FS();
+  if (fs) { try { const r = await fs.readdir({ path: 'nlt', directory: 'DATA' }); return r.files.length; } catch { return 0; } }
+  return memo.size;
 }
 
 function cleanNLT(raw) {
@@ -141,9 +168,16 @@ export async function passage(range) {
 }
 
 // Warm the NLT cache for upcoming readings so they work offline.
+// Download upcoming readings ahead of time (skips anything already saved).
+let prefetching = false;
 export async function prefetch(ranges) {
-  if (state.translation !== 'NLT' || !nltKey() || !navigator.onLine) return;
-  for (const r of ranges) for (const ch of chapters(r)) { try { await fetchNLT(ch); } catch { return; } }
+  if (prefetching || state.translation !== 'NLT' || !nltKey() || !navigator.onLine) return;
+  prefetching = true;
+  try {
+    for (const r of ranges) for (const ch of chapters(r)) {
+      try { await fetchNLT(ch); } catch { return; }
+    }
+  } finally { prefetching = false; }
 }
 
 export async function testKey(key) {

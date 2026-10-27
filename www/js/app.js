@@ -4,7 +4,7 @@ import {
   BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES,
 } from './plan.js';
 import { state, load, save, reset, isDone, setDone, streak, longestStreak, isLit, LIT } from './store.js';
-import { passage, prefetch, testKey, hasBuiltInKey, verseText, verseTextNLT, wantsNLT, NLT_NOTICE, WEB_NOTICE } from './text.js';
+import { passage, prefetch, savedCount, testKey, hasBuiltInKey, verseText, verseTextNLT, wantsNLT, NLT_NOTICE, WEB_NOTICE } from './text.js';
 import { rhemaRange, dailyIndex, randomIndex } from './rhema.js';
 import { loadDevo, devoFor } from './devo.js';
 import { openingFor, closingPrayer } from './prayers.js';
@@ -428,9 +428,13 @@ function viewToday() {
       </div>` : ''}
   `;
   loadRhema();
-  // Warm the cache for today + tomorrow
-  const tomorrow = readingsFor(state.startDate, addDays(t, 1));
-  prefetch([...todays, ...tomorrow].map((r) => r.range));
+  // Save the next 7 days (and their Rhema verses) on the phone for offline use
+  const ahead = [];
+  for (let d = 0; d < 7; d++) {
+    const date = addDays(t, d);
+    ahead.push(...readingsFor(state.startDate, date).map((r) => r.range), rhemaRange(dailyIndex(date)));
+  }
+  prefetch(ahead);
 }
 
 // ---------- rhema ----------
@@ -718,6 +722,7 @@ function viewSettings() {
         <div class="item"><div class="t"><b>Theme</b></div>
           ${seg('theme', state.theme, [['system', 'Auto'], ['dark', 'Dark'], ['light', 'Light']])}</div>
       </div>
+      <p class="help" id="saved-note">Checking saved passages…</p>
       <p class="help">The NLT is copyrighted, so it’s loaded from Tyndale’s official NLT API. Get a free key at <a href="https://api.nlt.to" target="_blank" rel="noopener">api.nlt.to</a>. Passages you’ve opened are saved on your phone for offline reading.</p>
     </div>
 
@@ -752,6 +757,13 @@ function viewSettings() {
     </div>
     <p class="help" style="text-align:center;margin-top:28px">Lamp · “Your word is a lamp to my feet.”</p>
   `;
+}
+
+async function fillSavedNote() {
+  const el = document.getElementById('saved-note');
+  if (!el) return;
+  const n = await savedCount();
+  el.textContent = n ? `${n} NLT chapter${n === 1 ? '' : 's'} saved on this phone for offline reading. The next 7 days download automatically when you're online.` : 'NLT passages are saved on this phone as you read, and the next 7 days download automatically when you’re online.';
 }
 
 function viewWelcome() {
@@ -829,7 +841,7 @@ function route() {
   if (view === 'pray') return viewPrayer(a === 'close' ? 'close' : 'open');
   if (reader) return viewReader(a, b);
   if (view === 'journey') return viewJourney();
-  if (view === 'settings') return viewSettings();
+  if (view === 'settings') { viewSettings(); fillSavedNote(); return; }
   if (view === 'catchup') return viewCatchup();
   return viewToday();
 }

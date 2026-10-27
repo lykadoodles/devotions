@@ -73,7 +73,10 @@ export function readingFor(track, key) {
 // Split [s,e] into per-book segments {b, c1, v1, c2, v2}
 export function segments([s, e]) {
   const out = [];
+  const track = META.books[s[0]].track;
   for (let b = s[0]; b <= e[0]; b++) {
+    // Psalms and Proverbs sit inside the OT but have their own streams
+    if (META.books[b].track !== track) continue;
     const vs = META.books[b].verses;
     const c1 = b === s[0] ? s[1] : 1;
     const v1 = b === s[0] ? s[2] : 1;
