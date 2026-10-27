@@ -37,12 +37,12 @@ const FLAME_SVG = (cls = '') => `
 <svg class="flame ${cls}" viewBox="0 0 100 130" aria-hidden="true">
   <defs>
     <radialGradient id="fg" cx="50%" cy="78%" r="70%">
-      <stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#e6eeff"/>
-      <stop offset=".85" stop-color="#b3caff"/><stop offset="1" stop-color="#8eaeff"/>
+      <stop offset="0" stop-color="#fff7d6"/><stop offset=".3" stop-color="#ffd166"/>
+      <stop offset=".65" stop-color="#f4892f"/><stop offset="1" stop-color="#d9480f"/>
     </radialGradient>
   </defs>
   <path d="M50 4C58 27 84 42 84 78c0 27-16 48-34 48S16 105 16 78c0-20 12-31 19-47 4 14 10 20 15 22C50 37 45 21 50 4z" fill="url(#fg)"/>
-  <path class="inner" d="M50 62c6 12 17 20 17 36 0 14-8 22-17 22s-17-8-17-22c0-12 11-21 17-36z" fill="#ffffff" opacity="1"/>
+  <path class="inner" d="M50 62c6 12 17 20 17 36 0 14-8 22-17 22s-17-8-17-22c0-12 11-21 17-36z" fill="#fff4c9" opacity=".95"/>
 </svg>`;
 
 const SPARKLE = (cls, style) => `<svg class="sparkle ${cls}" style="${style}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0c.8 6.4 2.6 9.9 12 12-9.4 2.1-11.2 5.6-12 12-.8-6.4-2.6-9.9-12-12C9.4 9.9 11.2 6.4 12 0z" fill="currentColor"/></svg>`;
@@ -81,10 +81,27 @@ function applyTheme() {
   const r = document.documentElement;
   if (state.theme === 'system') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', state.theme);
   r.style.setProperty('--read-size', `${Math.round(19 * state.fontScale)}px`);
+  r.setAttribute('data-readfont', state.readFont === 'sans' ? 'sans' : 'serif');
   const dark = state.theme === 'dark' || (state.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.querySelector('meta[name=theme-color]').content = dark ? '#2a5be8' : '#f4f7ff';
 }
-const greeting = () => { const h = new Date().getHours(); return h < 5 ? 'Peace tonight' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; };
+// Greetings rotate each time the app is opened (stable while navigating).
+const GREETINGS = {
+  late: ['Hi', 'Hello', 'Welcome back'],                  // 12–5 AM
+  morning: ['New mercies', 'Good morning', 'Morning'],     // 5 AM–12 PM
+  afternoon: ['Good afternoon', 'Hello', 'Welcome back'],  // 12–6 PM
+  evening: ['Good evening', 'Hello', 'Welcome back'],      // 6 PM–12 AM
+};
+let opens = 0;
+function countOpen() {
+  try { opens = (Number(localStorage.getItem('lamp.opens')) || 0) + 1; localStorage.setItem('lamp.opens', String(opens)); }
+  catch { opens = Math.floor(Math.random() * 3); }
+}
+const greeting = () => {
+  const h = new Date().getHours();
+  const set = GREETINGS[h < 5 ? 'late' : h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'];
+  return set[opens % set.length];
+};
 const dayNum = () => planDayFor(state.startDate, today());
 
 // ---------- progress maths ----------
@@ -367,6 +384,7 @@ async function viewReader(track, key) {
         <div class="reader-title"><div class="track">${t.name}</div><div class="ref">${esc(ref)}</div></div>
         <button class="icon-btn" data-action="font-" aria-label="Smaller text">${icon('aminus')}</button>
         <button class="icon-btn" data-action="font+" aria-label="Larger text">${icon('aplus')}</button>
+        <button class="icon-btn readfont-btn" data-action="readfont" aria-label="Switch reading font">${state.readFont === 'sans' ? '<span style="font-family:var(--serif);font-size:19px;font-weight:600">Aa</span>' : '<span style="font-family:var(--sans);font-size:18px;font-weight:800">Aa</span>'}</button>
       </div>
       <div class="progress" id="rprog"></div>
     </div>`;
@@ -523,6 +541,8 @@ function viewSettings() {
             <button class="btn small" data-action="save-key">Save</button>
           </div>
         </div>
+        <div class="item"><div class="t"><b>Reading font</b><span>${state.readFont === 'sans' ? 'Sans-serif (Manrope)' : 'Serif (Literata)'}</span></div>
+          ${seg('readFont', state.readFont || 'serif', [['serif', 'Serif'], ['sans', 'Sans']])}</div>
         <div class="item"><div class="t"><b>Text size</b><span>${Math.round(state.fontScale * 100)}%</span></div>
           <div class="seg-ctl"><button data-action="font-">A−</button><button data-action="font+">A+</button></div></div>
         <div class="item"><div class="t"><b>Theme</b></div>
@@ -686,6 +706,11 @@ document.addEventListener('click', async (e) => {
   }
   const a = el.dataset.action;
   if (a === 'back') { history.length > 1 ? history.back() : (location.hash = '#/today'); }
+  if (a === 'readfont') {
+    state.readFont = state.readFont === 'sans' ? 'serif' : 'sans'; save(); applyTheme();
+    el.innerHTML = state.readFont === 'sans' ? '<span style="font-family:var(--serif);font-size:19px;font-weight:600">Aa</span>' : '<span style="font-family:var(--sans);font-size:18px;font-weight:800">Aa</span>';
+    toast(state.readFont === 'sans' ? 'Sans-serif reading font' : 'Serif reading font');
+  }
   if (a === 'font+' || a === 'font-') {
     state.fontScale = Math.max(0.8, Math.min(1.6, +(state.fontScale + (a === 'font+' ? 0.1 : -0.1)).toFixed(2)));
     save(); applyTheme();
@@ -751,12 +776,17 @@ window.addEventListener('hashchange', route);
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 // Refresh the Today view when the app comes back to the foreground on a new day
 let lastDay = today();
+let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+  // Coming back after a few minutes counts as a fresh open: new greeting.
+  if (hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000) { countOpen(); if (!location.hash.startsWith('#/read')) route(); }
   if (document.visibilityState === 'visible' && today() !== lastDay) { lastDay = today(); route(); scheduleReminders(); }
 });
 
 (async function init() {
   await Promise.all([load(), loadPlan()]);
+  countOpen();
   applyTheme();
   route();
   scheduleReminders();

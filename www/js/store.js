@@ -14,6 +14,7 @@ const DEFAULTS = () => ({
   nltKey: '',
   theme: 'system',
   fontScale: 1,
+  readFont: 'serif',
   reminder: { on: false, time: '06:00' },
   // done[track][key] = date it was marked read
   done: { ot: {}, nt: {}, ps: {}, pr: {} },
@@ -50,7 +51,7 @@ export function save() {
 export function reset(keepSettings = true) {
   const keep = keepSettings
     ? { name: state.name, translation: state.translation, nltKey: state.nltKey, theme: state.theme,
-        fontScale: state.fontScale, reminder: state.reminder, onboarded: state.onboarded }
+        fontScale: state.fontScale, readFont: state.readFont, reminder: state.reminder, onboarded: state.onboarded }
     : {};
   Object.assign(state, DEFAULTS(), keep);
   save();
