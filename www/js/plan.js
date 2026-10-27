@@ -112,7 +112,8 @@ export function label(range) {
     const name = bookName(b, c1 === c2);
     if (c1 === c2) {
       if (fullStart && fullEnd) return oneChapterBook ? name : `${name} ${c1}`;
-      return oneChapterBook ? `${name} ${v1}–${v2}` : `${name} ${c1}:${v1}–${v2}`;
+      const vv = v1 === v2 ? `${v1}` : `${v1}–${v2}`;
+      return oneChapterBook ? `${name} ${vv}` : `${name} ${c1}:${vv}`;
     }
     if (fullStart && fullEnd) return `${name} ${c1}–${c2}`;
     return `${name} ${c1}:${v1}–${c2}:${v2}`;

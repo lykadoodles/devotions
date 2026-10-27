@@ -144,3 +144,29 @@ export async function testKey(key) {
   const html = cleanNLT(await res.text());
   return html;
 }
+
+// Plain text of a short passage (for the Rhema card and sharing).
+export async function verseText(range) {
+  if (state.translation === 'NLT' && nltKey()) {
+    try {
+      const parts = await Promise.all(chapters(range).map(fetchNLT));
+      const text = parts.map((h) => {
+        const d = new DOMParser().parseFromString(`<div>${h}</div>`, 'text/html');
+        d.querySelectorAll('h1,h2,h3,h4,sup,.vn,.ch-title,.tn,.a-tn').forEach((n) => n.remove());
+        return d.body.textContent;
+      }).join(' ').replace(/\s+/g, ' ').trim();
+      if (text.length > 5) return { text, translation: 'NLT' };
+    } catch {}
+  }
+  let out = '';
+  for (const ch of chapters(range)) {
+    const book = await webBook(ch.b);
+    let cur = 0;
+    for (const [kind, v, t] of book[ch.c - 1] || []) {
+      if (kind !== 'p' && kind !== 'l') continue;
+      if (v) cur = v;
+      if (cur >= ch.v1 && cur <= ch.v2) out += t + ' ';
+    }
+  }
+  return { text: out.replace(/\s+/g, ' ').trim(), translation: 'WEB' };
+}

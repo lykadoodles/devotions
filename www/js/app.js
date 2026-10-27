@@ -4,7 +4,8 @@ import {
   BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES,
 } from './plan.js';
 import { state, load, save, reset, isDone, setDone, streak, longestStreak, isLit, LIT } from './store.js';
-import { passage, prefetch, testKey, hasBuiltInKey, NLT_NOTICE, WEB_NOTICE } from './text.js';
+import { passage, prefetch, testKey, hasBuiltInKey, verseText, NLT_NOTICE, WEB_NOTICE } from './text.js';
+import { rhemaRange, dailyIndex, randomIndex } from './rhema.js';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -29,6 +30,8 @@ const ICON = {
   star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  share: '<path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M16 6l-4-4-4 4M12 2v13"/>',
+  shuffle: '<path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
 };
 const icon = (n) => `<svg viewBox="0 0 24 24">${ICON[n] || ''}</svg>`;
@@ -320,6 +323,18 @@ function viewToday() {
     </div>
     <p class="hero-sub">${sub}</p>
 
+    <section class="rhema rise" id="rhema" style="animation-delay:.15s">
+      <div class="rhema-head">
+        <span class="eyebrow">${SPARKLE('', 'position:static;width:14px;height:14px;display:inline-block;vertical-align:-2px;margin-right:6px')}Rhema for today</span>
+        <div class="rhema-actions">
+          <button class="icon-btn" data-action="rhema-new" aria-label="Show another verse">${icon('shuffle')}</button>
+          <button class="icon-btn" data-action="rhema-share" aria-label="Share this verse">${icon('share')}</button>
+        </div>
+      </div>
+      <p class="rhema-text" id="rhema-text">&nbsp;</p>
+      <div class="rhema-ref" id="rhema-ref">&nbsp;</div>
+    </section>
+
     ${miss.length ? `
       <a class="banner rise" href="#/catchup">
         <div class="t"><b>Catch up on ${miss.length} portion${miss.length > 1 ? 's' : ''}</b><span class="muted">From earlier days, so you can stay on track</span></div>
@@ -339,17 +354,37 @@ function viewToday() {
     ${all ? `
       <div class="done-note rise">
         <div class="h2">Well done ✦</div>
-        <p class="verse-quote">“${esc(vq)}”</p>
-        <div class="verse-ref">${esc(vr)}</div>
-      </div>` : `
-      <div class="section" style="text-align:center">
-        <p class="verse-quote muted">“${esc(vq)}”</p>
-        <div class="verse-ref">${esc(vr)}</div>
-      </div>`}
+        <p class="muted" style="margin:6px 0 0">See you tomorrow for day ${Math.min(n + 1, DAYS)}.</p>
+      </div>` : ''}
   `;
+  loadRhema();
   // Warm the cache for today + tomorrow
   const tomorrow = readingsFor(state.startDate, addDays(t, 1));
   prefetch([...todays, ...tomorrow].map((r) => r.range));
+}
+
+// ---------- rhema ----------
+let rhemaShown = null; // { ref, text, translation }
+function currentRhemaIndex() {
+  const t = today();
+  return state.rhema?.date === t ? state.rhema.idx : dailyIndex(t);
+}
+async function loadRhema(idx = currentRhemaIndex()) {
+  const box = document.getElementById('rhema');
+  if (!box) return;
+  const range = rhemaRange(idx);
+  const ref = label(range);
+  box.classList.add('loading-verse');
+  let res;
+  try { res = await verseText(range); } catch { res = { text: '', translation: '' }; }
+  const tEl = document.getElementById('rhema-text');
+  const rEl = document.getElementById('rhema-ref');
+  if (!tEl) return;
+  rhemaShown = { ref, ...res };
+  tEl.textContent = res.text ? `“${res.text}”` : 'Open today’s readings to begin.';
+  rEl.textContent = `${ref}${res.translation ? ` · ${res.translation}` : ''}`;
+  box.classList.remove('loading-verse');
+  box.classList.add('fresh'); setTimeout(() => box.classList.remove('fresh'), 600);
 }
 
 function viewCatchup() {
@@ -706,6 +741,21 @@ document.addEventListener('click', async (e) => {
   }
   const a = el.dataset.action;
   if (a === 'back') { history.length > 1 ? history.back() : (location.hash = '#/today'); }
+  if (a === 'rhema-new') {
+    const idx = randomIndex(currentRhemaIndex());
+    state.rhema = { date: today(), idx }; save(); haptic();
+    el.classList.add('spin'); setTimeout(() => el.classList.remove('spin'), 500);
+    loadRhema(idx);
+  }
+  if (a === 'rhema-share' && rhemaShown?.text) {
+    const msg = `“${rhemaShown.text}”\n— ${rhemaShown.ref} (${rhemaShown.translation})`;
+    const Sh = P().Share;
+    try {
+      if (Sh) await Sh.share({ title: rhemaShown.ref, text: msg, dialogTitle: 'Share this verse' });
+      else if (navigator.share) await navigator.share({ text: msg });
+      else { await navigator.clipboard.writeText(msg); toast('Verse copied'); }
+    } catch {}
+  }
   if (a === 'readfont') {
     state.readFont = state.readFont === 'sans' ? 'serif' : 'sans'; save(); applyTheme();
     el.innerHTML = state.readFont === 'sans' ? '<span style="font-family:var(--serif);font-size:19px;font-weight:600">Aa</span>' : '<span style="font-family:var(--sans);font-size:18px;font-weight:800">Aa</span>';
