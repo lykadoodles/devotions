@@ -46,8 +46,8 @@ jobs:
         run: |
           npx cap add android
           npx capacitor-assets generate --android \
-            --iconBackgroundColor '#14110f' --iconBackgroundColorDark '#14110f' \
-            --splashBackgroundColor '#14110f' --splashBackgroundColorDark '#14110f'
+            --iconBackgroundColor '#1f44c4' --iconBackgroundColorDark '#1f44c4' \
+            --splashBackgroundColor '#1f44c4' --splashBackgroundColorDark '#1f44c4'
           npx cap sync android
           # Daily reminders don't need exact alarms; drop the permission so
           # Play doesn't require an exact-alarm declaration.

@@ -37,13 +37,15 @@ const FLAME_SVG = (cls = '') => `
 <svg class="flame ${cls}" viewBox="0 0 100 130" aria-hidden="true">
   <defs>
     <radialGradient id="fg" cx="50%" cy="78%" r="70%">
-      <stop offset="0" stop-color="#fff7d6"/><stop offset=".3" stop-color="#ffd166"/>
-      <stop offset=".65" stop-color="#f4892f"/><stop offset="1" stop-color="#c2410c"/>
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#e6eeff"/>
+      <stop offset=".85" stop-color="#b3caff"/><stop offset="1" stop-color="#8eaeff"/>
     </radialGradient>
   </defs>
   <path d="M50 4C58 27 84 42 84 78c0 27-16 48-34 48S16 105 16 78c0-20 12-31 19-47 4 14 10 20 15 22C50 37 45 21 50 4z" fill="url(#fg)"/>
-  <path class="inner" d="M50 62c6 12 17 20 17 36 0 14-8 22-17 22s-17-8-17-22c0-12 11-21 17-36z" fill="#fff4c9" opacity=".92"/>
+  <path class="inner" d="M50 62c6 12 17 20 17 36 0 14-8 22-17 22s-17-8-17-22c0-12 11-21 17-36z" fill="#ffffff" opacity="1"/>
 </svg>`;
+
+const SPARKLE = (cls, style) => `<svg class="sparkle ${cls}" style="${style}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0c.8 6.4 2.6 9.9 12 12-9.4 2.1-11.2 5.6-12 12-.8-6.4-2.6-9.9-12-12C9.4 9.9 11.2 6.4 12 0z" fill="currentColor"/></svg>`;
 
 // Encouragement verses (World English Bible, public domain)
 const VERSES = [
@@ -80,7 +82,7 @@ function applyTheme() {
   if (state.theme === 'system') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', state.theme);
   r.style.setProperty('--read-size', `${Math.round(19 * state.fontScale)}px`);
   const dark = state.theme === 'dark' || (state.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.querySelector('meta[name=theme-color]').content = dark ? '#14110f' : '#faf5ec';
+  document.querySelector('meta[name=theme-color]').content = dark ? '#2a5be8' : '#f4f7ff';
 }
 const greeting = () => { const h = new Date().getHours(); return h < 5 ? 'Peace tonight' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; };
 const dayNum = () => planDayFor(state.startDate, today());
@@ -291,6 +293,7 @@ function viewToday() {
 
     <div class="hero ${all ? 'full' : ''}" style="--glow:${(0.12 + doneCount * 0.08).toFixed(2)}">
       <div class="glow"></div>
+      ${SPARKLE('s1', 'top:6%;right:12%')}${SPARKLE('s2', 'top:20%;left:8%')}${SPARKLE('s3', 'bottom:14%;right:6%')}
       ${ringSVG(todays)}
       <div class="flame-wrap" style="--fs:${flameScale(s)}">
         ${FLAME_SVG(s === 0 && doneCount === 0 ? 'ember' : '')}

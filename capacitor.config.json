@@ -3,10 +3,10 @@
   "appName": "Lamp",
   "webDir": "www",
   "android": {
-    "backgroundColor": "#14110f"
+    "backgroundColor": "#1f44c4"
   },
   "plugins": {
     "CapacitorHttp": { "enabled": true },
-    "LocalNotifications": { "iconColor": "#F5A742" }
+    "LocalNotifications": { "iconColor": "#2453E6" }
   }
 }
