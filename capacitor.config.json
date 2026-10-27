@@ -1,0 +1,12 @@
+{
+  "appId": "com.lykadoodles.lamp",
+  "appName": "Lamp",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#14110f"
+  },
+  "plugins": {
+    "CapacitorHttp": { "enabled": true },
+    "LocalNotifications": { "iconColor": "#F5A742" }
+  }
+}

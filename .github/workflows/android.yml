@@ -1,0 +1,101 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create Android project
+        run: |
+          npx cap add android
+          npx capacitor-assets generate --android \
+            --iconBackgroundColor '#14110f' --iconBackgroundColorDark '#14110f' \
+            --splashBackgroundColor '#14110f' --splashBackgroundColorDark '#14110f'
+          npx cap sync android
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          # A fixed signing key lets each new APK install over the previous one
+          # without losing your reading progress. If no secret is set, a key is
+          # created and the build still works (but updates may need a reinstall).
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > android/app/lamp.keystore
+          else
+            keytool -genkeypair -v -keystore android/app/lamp.keystore -alias lamp \
+              -keyalg RSA -keysize 2048 -validity 10000 -storepass lamp-devotions -keypass lamp-devotions \
+              -dname "CN=Lamp, O=Lykadoodles, C=PH"
+          fi
+
+      - name: Build APK
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          cat >> app/build.gradle <<'GRADLE'
+
+          android {
+              defaultConfig {
+                  versionCode Integer.parseInt(System.getenv("VERSION_CODE") ?: "1")
+                  versionName "1.0." + (System.getenv("VERSION_CODE") ?: "1")
+              }
+              signingConfigs {
+                  lamp {
+                      storeFile file("lamp.keystore")
+                      storePassword System.getenv("KEYSTORE_PASSWORD") ?: "lamp-devotions"
+                      keyAlias System.getenv("KEY_ALIAS") ?: "lamp"
+                      keyPassword System.getenv("KEYSTORE_PASSWORD") ?: "lamp-devotions"
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.lamp
+                      minifyEnabled false
+                  }
+              }
+          }
+          GRADLE
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk ../Lamp.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lamp-apk
+          path: Lamp.apk
+
+      - name: Publish to the "latest" release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest Lamp.apk \
+            --title "Lamp (build ${{ github.run_number }})" \
+            --notes "Download **Lamp.apk** on your Android phone and open it to install. Built from ${GITHUB_SHA::7}." \
+            --latest

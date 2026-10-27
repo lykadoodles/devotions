@@ -1,0 +1,24 @@
+{
+  "name": "lamp-devotions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lamp: a one-year Bible reading companion (OT, NT, Psalms, Proverbs daily)",
+  "scripts": {
+    "data": "node scripts/build-data.mjs",
+    "fonts": "node scripts/copy-fonts.mjs",
+    "serve": "npx http-server www -p 8080 -c-1"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/preferences": "^8.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.3",
+    "@fontsource/literata": "^5.3.0",
+    "@fontsource/manrope": "^5.3.0"
+  }
+}
