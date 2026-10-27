@@ -56,6 +56,10 @@ async function renderWEB(range) {
 }
 
 // ---- NLT ----
+// Never let a slow network or storage call hang the UI.
+const withTimeout = (promise, ms, msg = 'timed out') =>
+  Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
+
 const API = 'https://api.nlt.to/api/passages';
 const CACHE = 'nlt-v1';
 
@@ -65,12 +69,17 @@ function nltRef(ch) {
 }
 
 async function cached(ref) {
-  try { const c = await caches.open(CACHE); const r = await c.match(`/nlt/${encodeURIComponent(ref)}`); if (r) return r.text(); } catch {}
+  try {
+    const hit = await withTimeout((async () => {
+      const c = await caches.open(CACHE); const r = await c.match(`/nlt/${encodeURIComponent(ref)}`); return r ? r.text() : null;
+    })(), 1500);
+    if (hit) return hit;
+  } catch {}
   try { return localStorage.getItem(`nlt:${ref}`); } catch {}
   return null;
 }
 async function store(ref, html) {
-  try { const c = await caches.open(CACHE); await c.put(`/nlt/${encodeURIComponent(ref)}`, new Response(html)); return; } catch {}
+  try { await withTimeout((async () => { const c = await caches.open(CACHE); await c.put(`/nlt/${encodeURIComponent(ref)}`, new Response(html)); })(), 2000); return; } catch {}
   try { localStorage.setItem(`nlt:${ref}`, html); } catch {}
 }
 
@@ -100,7 +109,7 @@ async function fetchNLT(ch) {
   const hit = await cached(ref);
   if (hit) return hit;
   const url = `${API}?ref=${encodeURIComponent(ref)}&version=NLT&key=${encodeURIComponent(nltKey())}`;
-  const res = await fetch(url);
+  const res = await withTimeout(fetch(url), 10000, 'the NLT server took too long');
   if (!res.ok) throw new Error(res.status === 401 || res.status === 403 ? 'Your NLT key was rejected' : `NLT server error ${res.status}`);
   const html = cleanNLT(await res.text());
   await store(ref, html);
@@ -139,17 +148,31 @@ export async function prefetch(ranges) {
 
 export async function testKey(key) {
   const url = `${API}?ref=${encodeURIComponent('John 3:16')}&version=NLT&key=${encodeURIComponent(key)}`;
-  const res = await fetch(url);
+  const res = await withTimeout(fetch(url), 10000, 'the NLT server took too long');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const html = cleanNLT(await res.text());
   return html;
 }
 
 // Plain text of a short passage (for the Rhema card and sharing).
-export async function verseText(range) {
-  if (state.translation === 'NLT' && nltKey()) {
+export const wantsNLT = () => state.translation === 'NLT' && !!nltKey();
+
+// NLT text only (throws if unavailable)
+export async function verseTextNLT(range) {
+  const parts = await withTimeout(Promise.all(chapters(range).map(fetchNLT)), 12000);
+  const text = parts.map((h) => {
+    const d = new DOMParser().parseFromString(`<div>${h}</div>`, 'text/html');
+    d.querySelectorAll('h1,h2,h3,h4,sup,.vn,.ch-title,.tn,.a-tn').forEach((n) => n.remove());
+    return d.body.textContent;
+  }).join(' ').replace(/\s+/g, ' ').trim();
+  if (text.length < 5) throw new Error('empty');
+  return { text, translation: 'NLT' };
+}
+
+export async function verseText(range, { nlt = true } = {}) {
+  if (nlt && wantsNLT()) {
     try {
-      const parts = await Promise.all(chapters(range).map(fetchNLT));
+      const parts = await withTimeout(Promise.all(chapters(range).map(fetchNLT)), 12000);
       const text = parts.map((h) => {
         const d = new DOMParser().parseFromString(`<div>${h}</div>`, 'text/html');
         d.querySelectorAll('h1,h2,h3,h4,sup,.vn,.ch-title,.tn,.a-tn').forEach((n) => n.remove());

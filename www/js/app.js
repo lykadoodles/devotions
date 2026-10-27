@@ -4,8 +4,11 @@ import {
   BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES,
 } from './plan.js';
 import { state, load, save, reset, isDone, setDone, streak, longestStreak, isLit, LIT } from './store.js';
-import { passage, prefetch, testKey, hasBuiltInKey, verseText, NLT_NOTICE, WEB_NOTICE } from './text.js';
+import { passage, prefetch, testKey, hasBuiltInKey, verseText, verseTextNLT, wantsNLT, NLT_NOTICE, WEB_NOTICE } from './text.js';
 import { rhemaRange, dailyIndex, randomIndex } from './rhema.js';
+import { loadDevo, devoFor } from './devo.js';
+import { openingFor, closingPrayer } from './prayers.js';
+import * as music from './music.js';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -32,6 +35,12 @@ const ICON = {
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   share: '<path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M16 6l-4-4-4 4M12 2v13"/>',
   shuffle: '<path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>',
+  music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  musicoff: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/><path d="M3 3l18 18"/>',
+  pray: '<path d="M12 3c-1.5 2-3 4.5-3 8v6l-3 4h12l-3-4v-6c0-3.5-1.5-6-3-8z"/><path d="M12 3v14"/>',
+  play: '<path d="M7 4l13 8-13 8z"/>',
+  bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
 };
 const icon = (n) => `<svg viewBox="0 0 24 24">${ICON[n] || ''}</svg>`;
@@ -230,12 +239,21 @@ function showBadges(list, then) {
 }
 
 // Called after any reading is marked
-function afterMark(track, key, wasAllDoneBefore) {
+function afterMark(track, key, wasAllDoneBefore, fromReader = false) {
   const t = today();
   const todays = readingsFor(state.startDate, t);
   const allDone = todays.every((r) => isDone(r.track, r.key));
   const fresh = checkBadges();
   if (allDone && !wasAllDoneBefore && todays.some((r) => r.track === track && r.key === key)) {
+    if (fromReader && !prayed(t, 'close')) { pendingCelebration = true; showBadges(fresh); return; }
+    celebrate(fresh);
+  } else {
+    showBadges(fresh);
+  }
+}
+
+function celebrate(fresh = []) {
+  {
     haptic('success'); confetti(1.2);
     const s = streak();
     const [vq, vr] = verseOfDay();
@@ -247,9 +265,50 @@ function afterMark(track, key, wasAllDoneBefore) {
       <p class="verse-quote" style="color:var(--text)">“${esc(vq)}”</p>
       <div class="verse-ref" style="margin-bottom:18px">${esc(vr)}</div>
       <button class="btn primary block" data-close>Amen</button>`, () => showBadges(fresh));
-  } else {
-    showBadges(fresh);
   }
+}
+
+// ---------- devotion flow ----------
+const prayed = (date, which) => !!state.prayed?.[date]?.[which];
+function setPrayed(date, which) {
+  state.prayed ||= {};
+  state.prayed[date] = { ...(state.prayed[date] || {}), [which]: true };
+  save();
+}
+// Where "Start / Continue devotion" should go next
+function nextDevoStep() {
+  const t = today();
+  if (!prayed(t, 'open')) return '#/pray/open';
+  const r = readingsFor(state.startDate, t).find((x) => !isDone(x.track, x.key));
+  if (r) return `#/read/${r.track}/${r.key}`;
+  if (!prayed(t, 'close')) return '#/pray/close';
+  return null;
+}
+let pendingCelebration = false;
+
+function musicBtn() {
+  const on = music.isPlaying();
+  return `<button class="icon-btn music-btn ${on ? 'on' : ''}" data-action="music" aria-label="${on ? 'Turn off' : 'Play'} soft piano">${icon(on ? 'music' : 'musicoff')}</button>`;
+}
+function syncMusicButtons() {
+  document.querySelectorAll('.music-btn').forEach((b) => { b.outerHTML = musicBtn(); });
+}
+
+function prayerRow(which) {
+  const t = today();
+  const done = prayed(t, which);
+  const title = which === 'open' ? 'Opening prayer' : 'Closing prayer';
+  const sub = which === 'open' ? openingFor(t).theme : 'Respond to what God said today';
+  return `
+  <a class="rcard prayer-card ${done ? 'done' : ''} rise" href="#/pray/${which}">
+    <div class="glyph">${icon('pray')}</div>
+    <div class="body">
+      <div class="track">${title}</div>
+      <div class="ref">${esc(sub)}</div>
+      <div class="meta">${which === 'open' ? 'Ask for wisdom and guidance' : 'Based on today’s readings'} · 2 min</div>
+    </div>
+    <span class="check" aria-hidden="true">${icon('check')}</span>
+  </a>`;
 }
 
 // ---------- views ----------
@@ -323,6 +382,13 @@ function viewToday() {
     </div>
     <p class="hero-sub">${sub}</p>
 
+    ${(() => {
+      const next = nextDevoStep();
+      const started = prayed(t, 'open') || doneCount > 0;
+      if (!next) return `<div class="devo-cta done rise"><span>${icon('check')}</span> Today’s devotion is complete</div>`;
+      return `<a class="btn primary block devo-cta rise" href="#/devo">${icon('play')} ${started ? 'Continue today’s devotion' : 'Start today’s devotion'}</a>`;
+    })()}
+
     <section class="rhema rise" id="rhema" style="animation-delay:.15s">
       <div class="rhema-head">
         <span class="eyebrow">${SPARKLE('', 'position:static;width:14px;height:14px;display:inline-block;vertical-align:-2px;margin-right:6px')}Rhema for today</span>
@@ -349,7 +415,11 @@ function viewToday() {
       </div>` : ''}
     ${n < 1 ? `<p class="help" style="text-align:center">Your plan starts ${esc(fmtDate(state.startDate))}. Proverbs is ready for you every day.</p>` : ''}
 
-    <div class="readings">${todays.map(trackCard).join('')}</div>
+    <div class="readings">
+      ${prayerRow('open')}
+      ${todays.map(trackCard).join('')}
+      ${prayerRow('close')}
+    </div>
 
     ${all ? `
       <div class="done-note rise">
@@ -369,22 +439,29 @@ function currentRhemaIndex() {
   const t = today();
   return state.rhema?.date === t ? state.rhema.idx : dailyIndex(t);
 }
+let rhemaToken = 0;
 async function loadRhema(idx = currentRhemaIndex()) {
   const box = document.getElementById('rhema');
   if (!box) return;
+  const token = ++rhemaToken;
   const range = rhemaRange(idx);
   const ref = label(range);
-  box.classList.add('loading-verse');
-  let res;
-  try { res = await verseText(range); } catch { res = { text: '', translation: '' }; }
-  const tEl = document.getElementById('rhema-text');
-  const rEl = document.getElementById('rhema-ref');
-  if (!tEl) return;
-  rhemaShown = { ref, ...res };
-  tEl.textContent = res.text ? `“${res.text}”` : 'Open today’s readings to begin.';
-  rEl.textContent = `${ref}${res.translation ? ` · ${res.translation}` : ''}`;
-  box.classList.remove('loading-verse');
-  box.classList.add('fresh'); setTimeout(() => box.classList.remove('fresh'), 600);
+  const tEl = () => document.getElementById('rhema-text');
+  const rEl = () => document.getElementById('rhema-ref');
+  const show = (res) => {
+    if (token !== rhemaToken || !tEl()) return;
+    rhemaShown = { ref, ...res };
+    tEl().textContent = res.text ? `“${res.text}”` : '';
+    rEl().textContent = `${ref}${res.translation ? ` · ${res.translation}` : ''}`;
+    box.classList.add('fresh'); setTimeout(() => box.classList.remove('fresh'), 600);
+  };
+  rEl().textContent = ref;
+  // 1) instant, offline text
+  try { show(await verseText(range, { nlt: false })); } catch (e) { console.warn('rhema web', e); }
+  // 2) upgrade to NLT when it arrives
+  if (wantsNLT()) {
+    try { show(await verseTextNLT(range)); } catch (e) { console.warn('rhema nlt', e); }
+  }
 }
 
 function viewCatchup() {
@@ -419,12 +496,16 @@ async function viewReader(track, key) {
         <div class="reader-title"><div class="track">${t.name}</div><div class="ref">${esc(ref)}</div></div>
         <button class="icon-btn" data-action="font-" aria-label="Smaller text">${icon('aminus')}</button>
         <button class="icon-btn" data-action="font+" aria-label="Larger text">${icon('aplus')}</button>
+        ${musicBtn()}
         <button class="icon-btn readfont-btn" data-action="readfont" aria-label="Switch reading font">${state.readFont === 'sans' ? '<span style="font-family:var(--serif);font-size:19px;font-weight:600">Aa</span>' : '<span style="font-family:var(--sans);font-size:18px;font-weight:800">Aa</span>'}</button>
       </div>
       <div class="progress" id="rprog"></div>
     </div>`;
   $app.innerHTML = `${renderTop()}<div class="loading"><div class="spinner"></div></div>`;
+  autoMusic();
   let res;
+  await loadDevo();
+  const dv = devoFor(track, key);
   try { res = await passage(r.range); } catch (e) { res = { html: `<p>Couldn’t load this passage. ${esc(e.message || '')}</p>`, translation: '' }; }
   if (!location.hash.startsWith(`#/read/${track}/${key}`)) return; // navigated away
   const done = isDone(track, key);
@@ -435,6 +516,11 @@ async function viewReader(track, key) {
     ${renderTop()}
     ${res.note ? `<div class="note" style="margin:12px 16px 0">${esc(res.note)}</div>` : ''}
     <article class="scripture t-${track}">${res.html}</article>
+    ${dv ? `
+    <section class="takeaway t-${track}">
+      <div class="tk-row"><div class="tk-icon">${icon('bulb')}</div><div><div class="eyebrow">Key takeaway</div><p>${esc(dv.takeaway)}</p></div></div>
+      ${dv.apply ? `<div class="tk-row"><div class="tk-icon">${icon('target')}</div><div><div class="eyebrow">Apply it today</div><p>${esc(dv.apply)}</p></div></div>` : ''}
+    </section>` : ''}
     <div class="reader-foot t-${track}">
       <button class="btn primary block mark-btn ${done ? 'done' : ''}" data-mark="${track}|${key}">
         ${done ? `${icon('check').replace('<svg', '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="3"')} Read` : 'Mark as read'}
@@ -450,6 +536,55 @@ async function viewReader(track, key) {
   };
   onScroll();
   window.onscroll = onScroll;
+}
+
+// ---------- guided prayer ----------
+function autoMusic() { if (state.music?.on) music.play().then(syncMusicButtons); }
+
+async function viewPrayer(which) {
+  const t = today();
+  $app.classList.add('reader-mode');
+  autoMusic();
+  let prayer;
+  if (which === 'open') prayer = openingFor(t);
+  else {
+    await loadDevo();
+    const items = readingsFor(state.startDate, t).map((r) => devoFor(r.track, r.key)).filter(Boolean);
+    prayer = closingPrayer(items);
+  }
+  const lines = prayer.lines;
+  let i = 0;
+  const render = () => {
+    const done = i >= lines.length - 1;
+    const shown = lines.slice(0, i + 1);
+    $app.innerHTML = `
+      <div class="reader-top">
+        <div class="row">
+          <button class="icon-btn" data-action="back" aria-label="Back">${icon('back')}</button>
+          <div class="reader-title"><div class="track" style="color:var(--muted)">${which === 'open' ? 'Opening prayer' : 'Closing prayer'}</div><div class="ref">${esc(prayer.theme)}</div></div>
+          ${musicBtn()}
+        </div>
+      </div>
+      <div class="prayer">
+        <div class="prayer-flame">${FLAME_SVG()}</div>
+        <div class="eyebrow" style="text-align:center">${esc(prayer.refs)}</div>
+        <div class="prayer-lines">
+          ${shown.map((l, k) => typeof l === 'string'
+            ? `<p class="pl ${k === i ? 'current' : ''}">${esc(l)}</p>`
+            : `<div class="pl silence ${k === i ? 'current' : ''}"><div class="breath"></div><span>${esc(l.silence)}</span></div>`).join('')}
+        </div>
+        <div class="prayer-foot">
+          ${done
+            ? `<button class="btn primary block" data-action="amen" data-which="${which}">Amen</button>`
+            : `<button class="btn primary block" data-action="pray-next">${typeof lines[i] === 'object' ? 'Continue' : 'Next'}</button>`}
+          <div class="prayer-dots">${lines.map((_, k) => `<i class="${k <= i ? 'on' : ''}"></i>`).join('')}</div>
+        </div>
+      </div>`;
+    const cur = $app.querySelector('.pl.current');
+    cur?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  viewPrayer.next = () => { if (i < lines.length - 1) { i++; haptic(); render(); } };
+  render();
 }
 
 function nextUnreadToday() {
@@ -587,6 +722,15 @@ function viewSettings() {
     </div>
 
     <div class="section">
+      <div class="section-head"><div class="h2">Soft piano</div></div>
+      <div class="list">
+        <div class="item"><div class="t"><b>Play while reading and praying</b><span>Gentle ambient piano, made live on your phone</span></div>
+          <button class="switch ${state.music?.on ? 'on' : ''}" data-action="music-pref" aria-label="Toggle soft piano"></button></div>
+        <div class="item"><div class="t"><b>Volume</b></div><input type="range" id="mvol" min="0" max="100" value="${Math.round((state.music?.vol ?? 0.6) * 100)}" style="width:150px;accent-color:var(--accent)"></div>
+      </div>
+    </div>
+
+    <div class="section">
       <div class="section-head"><div class="h2">Daily reminder</div></div>
       <div class="list">
         <div class="item"><div class="t"><b>Remind me to read</b><span>A gentle nudge with the day’s passages</span></div>
@@ -676,10 +820,13 @@ function route() {
   $app.classList.remove('reader-mode');
   if (!state.onboarded) return viewWelcome();
   const [, view, a, b] = (location.hash || '#/today').split('/');
-  const reader = view === 'read';
+  if (view === 'devo') { const n = nextDevoStep(); location.replace(n || '#/today'); return; }
+  const reader = view === 'read' || view === 'pray';
   $tabs.hidden = reader;
+  if (!reader && music.isPlaying()) { music.stop(); }
   $tabs.querySelectorAll('a').forEach((x) => x.classList.toggle('on', x.dataset.tab === (view || 'today')));
   if (!reader) window.scrollTo(0, 0);
+  if (view === 'pray') return viewPrayer(a === 'close' ? 'close' : 'open');
   if (reader) return viewReader(a, b);
   if (view === 'journey') return viewJourney();
   if (view === 'settings') return viewSettings();
@@ -687,10 +834,10 @@ function route() {
   return viewToday();
 }
 
-function toggle(track, key, on) {
+function toggle(track, key, on, fromReader = false) {
   const before = readingsFor(state.startDate, today()).every((r) => isDone(r.track, r.key));
   setDone(track, key, on);
-  if (on) { haptic(); afterMark(track, key, before); }
+  if (on) { haptic(); afterMark(track, key, before, fromReader); }
   scheduleReminders();
 }
 
@@ -712,12 +859,15 @@ document.addEventListener('click', async (e) => {
   if (el.dataset.mark) {
     const [track, key] = el.dataset.mark.split('|');
     const on = !isDone(track, key);
-    toggle(track, key, on);
+    toggle(track, key, on, true);
     if (!on) return route();
     const next = nextUnreadToday();
     const foot = el.parentElement;
+    const isToday = readingsFor(state.startDate, today()).some((x) => x.track === track && x.key === key);
     el.outerHTML = `<button class="btn primary block mark-btn done" data-mark="${track}|${key}">${icon('check').replace('<svg', '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="3"')} Read</button>`;
-    if (next) {
+    if (isToday && !readingsFor(state.startDate, today()).some((x) => !isDone(x.track, x.key)) && !prayed(today(), 'close')) {
+      foot.insertAdjacentHTML('afterbegin', `<a class="btn block rise" style="margin-bottom:10px" href="#/pray/close">${icon('pray').replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"')} Continue to closing prayer</a>`);
+    } else if (next) {
       foot.insertAdjacentHTML('afterbegin', `<a class="btn block rise t-${next.track}" style="margin-bottom:10px;border-color:var(--c)" href="#/read/${next.track}/${next.key}">Next: ${esc(label(next.range))} ${icon('arrow').replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"')}</a>`);
     } else {
       foot.insertAdjacentHTML('afterbegin', `<a class="btn block rise" style="margin-bottom:10px" href="#/today">Back to today</a>`);
@@ -741,6 +891,34 @@ document.addEventListener('click', async (e) => {
   }
   const a = el.dataset.action;
   if (a === 'back') { history.length > 1 ? history.back() : (location.hash = '#/today'); }
+  if (a === 'music') {
+    state.music ||= { on: false, vol: 0.6 };
+    if (music.isPlaying()) { music.stop(); state.music.on = false; }
+    else { music.setVolume(state.music.vol ?? 0.6); await music.play(); state.music.on = true; }
+    save(); syncMusicButtons();
+    if (location.hash.startsWith('#/settings')) route();
+  }
+  if (a === 'pray-next') viewPrayer.next?.();
+  if (a === 'music-pref') {
+    state.music ||= { on: false, vol: 0.6 };
+    state.music.on = !state.music.on; save();
+    if (state.music.on) { music.setVolume(state.music.vol ?? 0.6); await music.play(); setTimeout(() => music.stop(), 4000); toast('Soft piano will play during your devotion'); }
+    route();
+  }
+  if (a === 'amen') {
+    const which = el.dataset.which;
+    setPrayed(today(), which); haptic('success');
+    if (which === 'open') {
+      const r = readingsFor(state.startDate, today()).find((x) => !isDone(x.track, x.key));
+      location.hash = r ? `#/read/${r.track}/${r.key}` : '#/today';
+    } else {
+      location.hash = '#/today';
+      if (pendingCelebration || readingsFor(state.startDate, today()).every((x) => isDone(x.track, x.key))) {
+        pendingCelebration = false;
+        setTimeout(() => celebrate(checkBadges()), 450);
+      }
+    }
+  }
   if (a === 'rhema-new') {
     const idx = randomIndex(currentRhemaIndex());
     state.rhema = { date: today(), idx }; save(); haptic();
@@ -815,6 +993,7 @@ document.addEventListener('click', async (e) => {
 
 document.addEventListener('change', (e) => {
   const id = e.target.id;
+  if (id === 'mvol') { state.music ||= { on: false, vol: 0.6 }; state.music.vol = Number(e.target.value) / 100; save(); music.setVolume(state.music.vol); }
   if (id === 'rtime') { state.reminder.time = e.target.value || '06:00'; save(); scheduleReminders(); toast('Reminder time saved'); }
   if (id === 'name') { state.name = e.target.value.trim(); save(); }
   if (id === 'start' && e.target.value) {
@@ -827,8 +1006,10 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyThe
 // Refresh the Today view when the app comes back to the foreground on a new day
 let lastDay = today();
 let hiddenAt = 0;
+let resumeMusic = false;
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+  if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); if (music.isPlaying()) { music.stop(0.2); resumeMusic = true; } return; }
+  if (resumeMusic) { resumeMusic = false; if (/^#\/(read|pray)/.test(location.hash)) music.play().then(syncMusicButtons); }
   // Coming back after a few minutes counts as a fresh open: new greeting.
   if (hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000) { countOpen(); if (!location.hash.startsWith('#/read')) route(); }
   if (document.visibilityState === 'visible' && today() !== lastDay) { lastDay = today(); route(); scheduleReminders(); }
