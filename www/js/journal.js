@@ -75,3 +75,29 @@ export const highlightCount = () => Object.keys(hl()).length;
 
 // Wrap in quotation marks unless the verse already opens with one
 export const quote = (t) => (/^[“"‘']/.test(t) ? t : `“${t}”`);
+
+// ---------- emoji reactions (one per verse) ----------
+export const REACTIONS = [
+  ['🙏', 'Prayer'], ['❤️', 'Love'], ['🙌', 'Praise'], ['😭', 'Moved to tears'],
+  ['🔥', 'Fired up'], ['✨', 'Revelation'], ['💡', 'Insight'], ['🕊️', 'Peace'],
+];
+const rx = () => (state.reactions ||= {});   // key -> { emoji, text, tr, date }
+export const reactionOf = (k) => rx()[k];
+export function setReaction(items, emoji, tr = state.translation) {
+  for (const { k, text } of items) {
+    if (!emoji) delete rx()[k];
+    else rx()[k] = { emoji, text, tr, date: today() };
+  }
+  save();
+}
+export const reactionCount = () => Object.keys(rx()).length;
+
+// Every verse you marked: highlighted and/or reacted to
+export function markedVerses() {
+  const keys = new Set([...Object.keys(state.highlights || {}), ...Object.keys(rx())]);
+  return [...keys].map((k) => {
+    const h = state.highlights?.[k]; const r = rx()[k];
+    return { k, color: h?.color || null, emoji: r?.emoji || null, text: (h || r).text, tr: (h || r).tr,
+      date: [h?.date, r?.date].filter(Boolean).sort().pop() };
+  }).sort((a, b) => b.date.localeCompare(a.date) || compareKeys(a.k, b.k));
+}

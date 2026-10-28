@@ -186,6 +186,7 @@ const BADGES = [
   { id: 'intercessor', name: 'Faithful Intercessor', desc: 'Pray for requests 50 times', icon: 'pray', test: () => PL.totalPrayed() >= 50 },
   { id: 'heartnote', name: 'Treasured Word', desc: 'Write your first heart note', icon: 'book', test: () => J.noteCount() >= 1 },
   { id: 'notes10', name: 'Heart Journal', desc: 'Write ten heart notes', icon: 'book', test: () => J.noteCount() >= 10 },
+  { id: 'react10', name: 'Heart Felt', desc: 'React to ten verses', icon: 'spark', test: () => J.reactionCount() >= 10 },
   { id: 'bible', name: 'The Whole Story', desc: 'Every book of the Bible', icon: 'crown', test: () => range(0, 65).every(bookDone) },
 ];
 function checkBadges() {
@@ -650,6 +651,7 @@ function tagVerses(root, range) {
 }
 
 function paintVerses() {
+  document.querySelectorAll('.scripture sup.vreact').forEach((x) => x.remove());
   const lastSpan = {};
   document.querySelectorAll('.scripture span.v').forEach((sp) => {
     const k = sp.dataset.k;
@@ -660,7 +662,17 @@ function paintVerses() {
     sp.classList.remove('note-end');
     lastSpan[k] = sp;
   });
-  for (const [k, sp] of Object.entries(lastSpan)) if (J.notesFor(k).length) sp.classList.add('note-end');
+  for (const [k, sp] of Object.entries(lastSpan)) {
+    if (J.notesFor(k).length) sp.classList.add('note-end');
+    const r = J.reactionOf(k);
+    if (r) {
+      const sup = document.createElement('sup');
+      sup.className = 'vreact';
+      sup.textContent = r.emoji;
+      sup.title = (J.REACTIONS.find(([e]) => e === r.emoji) || [])[1] || '';
+      sp.after(sup);
+    }
+  }
 }
 
 function selectedItems() {
@@ -684,6 +696,12 @@ function renderVerseBar() {
   bar.innerHTML = `
     <div class="vbar-top"><b>${esc(J.refOf(items.map((i) => i.k)))}</b>
       <button class="icon-btn" data-action="v-clear" aria-label="Clear selection"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="vbar-emoji">
+      ${J.REACTIONS.map(([e, name]) => {
+        const on = items.length && items.every((i) => J.reactionOf(i.k)?.emoji === e);
+        return `<button class="emo ${on ? 'on' : ''}" data-action="v-react" data-emoji="${e}" aria-label="${name}" title="${name}">${e}</button>`;
+      }).join('')}
+    </div>
     <div class="vbar-colors">
       ${Object.entries(J.COLORS).map(([name, hex]) => `<button class="swatch" style="--sw:${hex}" data-action="v-hl" data-color="${name}" aria-label="Highlight ${name}"></button>`).join('')}
       ${allHl ? `<button class="swatch clear" data-action="v-hl" data-color="" aria-label="Remove highlight"><svg viewBox="0 0 24 24"><path d="M5 19L19 5"/></svg></button>` : ''}
@@ -719,9 +737,12 @@ document.addEventListener('click', (e) => {
 
 // ---------- journal ----------
 let journalTab = 'notes';
+let journalEmoji = '';
 function viewJournal() {
   const notes = J.allNotes();
-  const hls = J.allHighlights();
+  const hls = J.markedVerses().filter((h) => !journalEmoji || h.emoji === journalEmoji);
+  const allMarked = J.markedVerses();
+  const usedEmoji = J.REACTIONS.filter(([e]) => allMarked.some((h) => h.emoji === e));
   const noteCard = (n) => `
     <div class="jcard rise" style="--jc:${n.color ? J.COLORS[n.color] : 'var(--flame-hi)'}">
       <div class="jc-head"><b>${esc(n.ref)}</b><span>${esc(fmtDate(n.date, { month: 'short', day: 'numeric', year: 'numeric' }))}${n.tr ? ` · ${esc(n.tr)}` : ''}</span></div>
@@ -733,12 +754,12 @@ function viewJournal() {
       </div>
     </div>`;
   const hlCard = (h) => `
-    <div class="jcard hlcard rise" style="--jc:${J.COLORS[h.color] || 'var(--flame-hi)'}">
-      <div class="jc-head"><b>${esc(J.refOf([h.k]))}</b><span>${esc(fmtDate(h.date, { month: 'short', day: 'numeric' }))}${h.tr ? ` · ${esc(h.tr)}` : ''}</span></div>
+    <div class="jcard hlcard rise" style="--jc:${J.COLORS[h.color] || 'var(--line)'}">
+      <div class="jc-head"><b>${esc(J.refOf([h.k]))}${h.emoji ? ` <span class="jc-emo">${h.emoji}</span>` : ''}</b><span>${esc(fmtDate(h.date, { month: 'short', day: 'numeric' }))}${h.tr ? ` · ${esc(h.tr)}` : ''}</span></div>
       <p class="jc-verse">${esc(h.text)}</p>
       <div class="pc-actions">
         <button class="pc-btn" data-action="h-share" data-k="${h.k}">${icon('share')}<span>Share</span></button>
-        <button class="pc-btn more" data-action="h-remove" data-k="${h.k}" aria-label="Remove highlight"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <button class="pc-btn more" data-action="h-remove" data-k="${h.k}" aria-label="Remove"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
     </div>`;
   $app.innerHTML = `
@@ -749,12 +770,16 @@ function viewJournal() {
     </div></header>
     <div class="seg-ctl jtabs rise">
       <button class="${journalTab === 'notes' ? 'on' : ''}" data-action="j-tab" data-tab="notes">Heart notes · ${notes.length}</button>
-      <button class="${journalTab === 'hl' ? 'on' : ''}" data-action="j-tab" data-tab="hl">Highlights · ${hls.length}</button>
+      <button class="${journalTab === 'hl' ? 'on' : ''}" data-action="j-tab" data-tab="hl">Verses · ${allMarked.length}</button>
     </div>
+    ${journalTab === 'hl' && usedEmoji.length ? `<div class="emo-filter rise">
+      <button class="${!journalEmoji ? 'on' : ''}" data-action="j-emo" data-emoji="">All</button>
+      ${usedEmoji.map(([e, name]) => `<button class="${journalEmoji === e ? 'on' : ''}" data-action="j-emo" data-emoji="${e}" title="${name}">${e} <small>${allMarked.filter((h) => h.emoji === e).length}</small></button>`).join('')}
+    </div>` : ''}
     <div class="plist" style="margin-top:16px">
       ${journalTab === 'notes'
         ? (notes.length ? notes.map(noteCard).join('') : `<p class="help" style="text-align:center;margin:24px 8px">No notes yet. While reading, tap a verse that speaks to you, then tap <b>Note</b>.</p>`)
-        : (hls.length ? hls.map(hlCard).join('') : `<p class="help" style="text-align:center;margin:24px 8px">No highlights yet. While reading, tap a verse and pick a color.</p>`)}
+        : (hls.length ? hls.map(hlCard).join('') : `<p class="help" style="text-align:center;margin:24px 8px">No marked verses yet. While reading, tap a verse, then pick a color or an emoji.</p>`)}
     </div>`;
 }
 
@@ -905,7 +930,7 @@ function viewJourney() {
 
     <a class="card section journal-card rise" href="#/journal">
       <div class="jl-icon">${icon('book')}</div>
-      <div class="t"><b>Your journal</b><span>${J.noteCount()} heart note${J.noteCount() === 1 ? '' : 's'} · ${J.highlightCount()} highlighted verse${J.highlightCount() === 1 ? '' : 's'}</span></div>
+      <div class="t"><b>Your journal</b><span>${J.noteCount()} heart note${J.noteCount() === 1 ? '' : 's'} · ${J.markedVerses().length} marked verse${J.markedVerses().length === 1 ? '' : 's'}</span></div>
       <div class="icon-btn">${icon('arrow')}</div>
     </a>
 
@@ -1185,6 +1210,14 @@ document.addEventListener('click', async (e) => {
   }
   if (a === 'reading-sheet') openReadingSheet();
   if (a === 'v-clear') clearSelection();
+  if (a === 'v-react') {
+    const items = selectedItems();
+    const already = items.every((i) => J.reactionOf(i.k)?.emoji === el.dataset.emoji);
+    J.setReaction(items, already ? null : el.dataset.emoji, readerTr);
+    haptic();
+    clearSelection();
+    showBadges(checkBadges());
+  }
   if (a === 'v-hl') {
     J.setHighlight(selectedItems(), el.dataset.color || null, readerTr);
     haptic(); toast(el.dataset.color ? 'Highlighted' : 'Highlight removed');
@@ -1219,15 +1252,17 @@ document.addEventListener('click', async (e) => {
     showBadges(checkBadges());
   }
   if (a === 'j-tab') { journalTab = el.dataset.tab; viewJournal(); }
+  if (a === 'j-emo') { journalEmoji = el.dataset.emoji; viewJournal(); }
   if (a === 'j-share') {
     const n = J.allNotes().find((x) => x.id === el.dataset.id);
     if (n) await shareVerses(`${J.quote(n.text)}\n— ${n.ref}${n.tr ? ` (${n.tr})` : ''}`, n.ref);
   }
   if (a === 'h-share') {
     const h = J.highlightOf(el.dataset.k);
-    if (h) await shareVerses(`${J.quote(h.text)}\n— ${J.refOf([el.dataset.k])}${h.tr ? ` (${h.tr})` : ''}`, J.refOf([el.dataset.k]));
+    const hv = h || J.reactionOf(el.dataset.k);
+    if (hv) await shareVerses(`${J.quote(hv.text)}\n— ${J.refOf([el.dataset.k])}${hv.tr ? ` (${hv.tr})` : ''}`, J.refOf([el.dataset.k]));
   }
-  if (a === 'h-remove') { J.setHighlight([{ k: el.dataset.k }], null); viewJournal(); toast('Highlight removed'); }
+  if (a === 'h-remove') { J.setHighlight([{ k: el.dataset.k }], null); J.setReaction([{ k: el.dataset.k }], null); viewJournal(); toast('Removed'); }
   if (a === 'j-menu') {
     const n = J.allNotes().find((x) => x.id === el.dataset.id);
     if (!n) return;

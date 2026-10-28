@@ -585,3 +585,16 @@ body { background: var(--page-bg); background-attachment: fixed; }
 .jc-head span { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .jc-verse { font-family: var(--serif); font-style: italic; font-size: 16px; line-height: 1.55; margin: 8px 0 0; color: var(--text); }
 .jc-note { font-size: 15px; line-height: 1.55; margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); white-space: pre-wrap; }
+
+/* emoji reactions */
+.scripture sup.vreact { font-size: .62em; line-height: 0; vertical-align: .8em; margin-left: -.12em; font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif; }
+.vbar-emoji { display: flex; justify-content: space-between; padding: 8px 2px 2px; }
+.emo { width: 38px; height: 38px; border-radius: 12px; font-size: 21px; display: grid; place-items: center; transition: transform .15s, background .2s; }
+.emo:active { transform: scale(1.25); }
+.emo.on { background: var(--surface-2); box-shadow: inset 0 0 0 2px var(--accent); }
+.jc-emo { font-size: 17px; margin-left: 4px; }
+.emo-filter { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.emo-filter button { height: 34px; padding: 0 12px; border-radius: 999px; font-size: 15px; font-weight: 700; background: var(--surface); border: 1px solid var(--line); }
+.emo-filter button small { font-size: 11px; color: var(--muted); margin-left: 2px; }
+.emo-filter button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.emo-filter button.on small { color: var(--on-accent); }
