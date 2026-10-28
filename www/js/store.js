@@ -79,7 +79,11 @@ export function setDone(track, key, on) {
 
 // A day is "lit" when four portions were read on it.
 export const LIT = 4;
-export const isLit = (date) => (state.log[date] || 0) >= LIT;
+// The app also counts a day as lit when all of that day's readings are done
+// (so reading ahead keeps tomorrow's streak alive).
+let litHook = () => false;
+export const setLitHook = (fn) => { litHook = fn; };
+export const isLit = (date) => (state.log[date] || 0) >= LIT || litHook(date);
 
 export function streak() {
   let d = today();
@@ -90,7 +94,9 @@ export function streak() {
 }
 
 export function longestStreak() {
-  const days = Object.keys(state.log).filter(isLit).sort();
+  const set = new Set(Object.keys(state.log));
+  for (let d = state.startDate, t = today(); d <= t; d = addDays(d, 1)) set.add(d);
+  const days = [...set].filter(isLit).sort();
   let best = 0, run = 0, prev = null;
   for (const d of days) {
     run = prev && diffDays(prev, d) === 1 ? run + 1 : 1;

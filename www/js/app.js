@@ -3,7 +3,7 @@ import {
   planDayFor, readingsFor, readingFor, label, verseCount, minutes, proverbsChapters,
   BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES,
 } from './plan.js';
-import { state, load, save, reset, isDone, setDone, streak, longestStreak, isLit, LIT } from './store.js';
+import { state, load, save, reset, isDone, setDone, streak, longestStreak, isLit, LIT, setLitHook } from './store.js';
 import { passage, prefetch, savedCount, testKey, hasBuiltInKey, verseText, verseTextOnline, wantsOnline, NOTICES, TRANSLATIONS, TRANSLATION_ORDER, current as currentTranslation } from './text.js';
 import { rhemaRange, dailyIndex, randomIndex } from './rhema.js';
 import { loadDevo, devoFor } from './devo.js';
@@ -240,20 +240,21 @@ function showBadges(list, then) {
 
 // Called after any reading is marked
 function afterMark(track, key, wasAllDoneBefore, fromReader = false) {
-  const t = today();
+  const t = dateOfReading(track, key);
   const todays = readingsFor(state.startDate, t);
   const allDone = todays.every((r) => isDone(r.track, r.key));
   const fresh = checkBadges();
-  if (allDone && !wasAllDoneBefore && todays.some((r) => r.track === track && r.key === key)) {
+  if (allDone && !wasAllDoneBefore && t >= today()) {
     if (fromReader && !prayed(t, 'close')) { pendingCelebration = true; showBadges(fresh); return; }
-    celebrate(fresh);
+    celebrate(fresh, t);
   } else {
     showBadges(fresh);
   }
 }
 
-function celebrate(fresh = []) {
+function celebrate(fresh = [], date = today()) {
   {
+    const ahead = date > today();
     haptic('success'); confetti(1.2);
     const s = streak();
     const [vq, vr] = verseOfDay();
@@ -261,7 +262,7 @@ function celebrate(fresh = []) {
       ${FLAME_SVG('pop-in')}
       <div class="streak-num" style="font-size:54px">${s}</div>
       <div class="streak-label">day streak</div>
-      <div class="h1">Today’s lamp is full</div>
+      <div class="h1">${ahead ? `Day ${planDayFor(state.startDate, date)} is complete` : 'Today’s lamp is full'}</div>
       <p class="verse-quote" style="color:var(--text)">“${esc(vq)}”</p>
       <div class="verse-ref" style="margin-bottom:18px">${esc(vr)}</div>
       <button class="btn primary block" data-close>Amen</button>`, () => showBadges(fresh));
@@ -269,6 +270,16 @@ function celebrate(fresh = []) {
 }
 
 // ---------- devotion flow ----------
+// Calendar date a reading belongs to (Proverbs is keyed by date, others by plan day)
+const dateOfReading = (track, key) => (track === 'pr' ? key : addDays(state.startDate, Number(key) - 1));
+const dayComplete = (date) => {
+  const n = planDayFor(state.startDate, date);
+  if (n < 1 || n > DAYS) return false;
+  return readingsFor(state.startDate, date).every((r) => isDone(r.track, r.key));
+};
+setLitHook(dayComplete);
+const daySuffix = (date) => (date === today() ? '' : `/${date}`);
+const dayHref = (date) => (date === today() ? '#/today' : `#/day/${date}`);
 const prayed = (date, which) => !!state.prayed?.[date]?.[which];
 function setPrayed(date, which) {
   state.prayed ||= {};
@@ -276,12 +287,11 @@ function setPrayed(date, which) {
   save();
 }
 // Where "Start / Continue devotion" should go next
-function nextDevoStep() {
-  const t = today();
-  if (!prayed(t, 'open')) return '#/pray/open';
+function nextDevoStep(t = today()) {
+  if (!prayed(t, 'open')) return `#/pray/open${daySuffix(t)}`;
   const r = readingsFor(state.startDate, t).find((x) => !isDone(x.track, x.key));
   if (r) return `#/read/${r.track}/${r.key}`;
-  if (!prayed(t, 'close')) return '#/pray/close';
+  if (!prayed(t, 'close')) return `#/pray/close${daySuffix(t)}`;
   return null;
 }
 let pendingCelebration = false;
@@ -294,13 +304,12 @@ function syncMusicButtons() {
   document.querySelectorAll('.music-btn').forEach((b) => { b.outerHTML = musicBtn(); });
 }
 
-function prayerRow(which) {
-  const t = today();
+function prayerRow(which, t = today()) {
   const done = prayed(t, which);
   const title = which === 'open' ? 'Opening prayer' : 'Closing prayer';
   const sub = which === 'open' ? openingFor(t).theme : 'Respond to what God said today';
   return `
-  <a class="rcard prayer-card ${done ? 'done' : ''} rise" href="#/pray/${which}">
+  <a class="rcard prayer-card ${done ? 'done' : ''} rise" href="#/pray/${which}${daySuffix(t)}">
     <div class="glyph">${icon('pray')}</div>
     <div class="body">
       <div class="track">${title}</div>
@@ -341,15 +350,16 @@ function ringSVG(todays) {
 
 function flameScale(s) { return s === 0 ? 0.8 : s < 3 ? 1 : s < 7 ? 1.15 : s < 30 ? 1.3 : s < 100 ? 1.45 : 1.6; }
 
-function viewToday() {
-  const t = today();
-  const n = dayNum();
+function viewToday(date) {
+  const t = date && date > today() ? date : today();
+  const ahead = t > today();
+  const n = planDayFor(state.startDate, t);
   const todays = readingsFor(state.startDate, t);
   const doneCount = todays.filter((r) => isDone(r.track, r.key)).length;
   const all = doneCount === todays.length;
   const s = streak();
   const litToday = isLit(t);
-  const miss = missed();
+  const miss = ahead ? [] : missed();
   const totalMin = todays.filter((r) => !isDone(r.track, r.key)).reduce((a, r) => a + minutes(r.range), 0);
   const [vq, vr] = verseOfDay();
   let dayLabel;
@@ -364,8 +374,9 @@ function viewToday() {
   $app.innerHTML = `
     <header class="top rise">
       <div>
-        <div class="eyebrow">${esc(fmtDate(t))}</div>
-        <h1 class="h1">${greeting()}${state.name ? `, ${esc(state.name)}` : ''}</h1>
+        ${ahead ? `<a class="eyebrow" href="#/today">← Back to today</a>` : `<div class="eyebrow">${esc(fmtDate(t))}</div>`}
+        <h1 class="h1">${ahead ? `Reading ahead` : `${greeting()}${state.name ? `, ${esc(state.name)}` : ''}`}</h1>
+        ${ahead ? `<p class="muted" style="margin:6px 0 0">${esc(fmtDate(t))}’s devotion. It will count for that day.</p>` : ''}
       </div>
       <div class="daypill">${dayLabel}</div>
     </header>
@@ -383,13 +394,13 @@ function viewToday() {
     <p class="hero-sub">${sub}</p>
 
     ${(() => {
-      const next = nextDevoStep();
+      const next = nextDevoStep(t);
       const started = prayed(t, 'open') || doneCount > 0;
-      if (!next) return `<div class="devo-cta done rise"><span>${icon('check')}</span> Today’s devotion is complete</div>`;
-      return `<a class="btn primary block devo-cta rise" href="#/devo">${icon('play')} ${started ? 'Continue today’s devotion' : 'Start today’s devotion'}</a>`;
+      if (!next) return `<div class="devo-cta done rise"><span>${icon('check')}</span> ${ahead ? `Day ${n}’s devotion is complete` : 'Today’s devotion is complete'}</div>`;
+      return `<a class="btn primary block devo-cta rise" href="#/devo${daySuffix(t)}">${icon('play')} ${ahead ? `${started ? 'Continue' : 'Start'} Day ${n}’s devotion` : started ? 'Continue today’s devotion' : 'Start today’s devotion'}</a>`;
     })()}
 
-    <section class="rhema rise" id="rhema" style="animation-delay:.15s">
+    ${ahead ? '' : `<section class="rhema rise" id="rhema" style="animation-delay:.15s">
       <div class="rhema-head">
         <span class="eyebrow">${SPARKLE('', 'position:static;width:14px;height:14px;display:inline-block;vertical-align:-2px;margin-right:6px')}Rhema for today</span>
         <div class="rhema-actions">
@@ -399,7 +410,7 @@ function viewToday() {
       </div>
       <p class="rhema-text" id="rhema-text">&nbsp;</p>
       <div class="rhema-ref" id="rhema-ref">&nbsp;</div>
-    </section>
+    </section>`}
 
     ${miss.length ? `
       <a class="banner rise" href="#/catchup">
@@ -416,25 +427,28 @@ function viewToday() {
     ${n < 1 ? `<p class="help" style="text-align:center">Your plan starts ${esc(fmtDate(state.startDate))}. Proverbs is ready for you every day.</p>` : ''}
 
     <div class="readings">
-      ${prayerRow('open')}
+      ${prayerRow('open', t)}
       ${todays.map(trackCard).join('')}
-      ${prayerRow('close')}
+      ${prayerRow('close', t)}
     </div>
 
     ${all ? `
       <div class="done-note rise">
         <div class="h2">Well done ✦</div>
-        <p class="muted" style="margin:6px 0 0">See you tomorrow for day ${Math.min(n + 1, DAYS)}.</p>
+        ${n >= 1 && n < DAYS ? `
+          <p class="muted" style="margin:6px 0 14px">Still hungry for the Word? You can read ahead.</p>
+          <a class="btn block read-ahead" href="#/day/${addDays(t, 1)}">Continue to Day ${n + 1} ${icon('arrow').replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"')}</a>`
+        : `<p class="muted" style="margin:6px 0 0">See you tomorrow.</p>`}
       </div>` : ''}
   `;
-  loadRhema();
+  if (!ahead) loadRhema();
   // Save the next 7 days (and their Rhema verses) on the phone for offline use
-  const ahead = [];
+  const upcoming = [];
   for (let d = 0; d < 7; d++) {
     const date = addDays(t, d);
-    ahead.push(...readingsFor(state.startDate, date).map((r) => r.range), rhemaRange(dailyIndex(date)));
+    upcoming.push(...readingsFor(state.startDate, date).map((r) => r.range), rhemaRange(dailyIndex(date)));
   }
-  prefetch(ahead);
+  prefetch(upcoming);
 }
 
 // ---------- rhema ----------
@@ -469,7 +483,7 @@ async function loadRhema(idx = currentRhemaIndex()) {
 }
 
 function viewCatchup() {
-  const miss = missed();
+  const miss = ahead ? [] : missed();
   const groups = {};
   for (const m of miss) (groups[m.date] ||= []).push(m);
   const dates = Object.keys(groups).sort().reverse();
@@ -579,8 +593,7 @@ function openReadingSheet() {
 // ---------- guided prayer ----------
 function autoMusic() { if (state.music?.on) music.play().then(syncMusicButtons); }
 
-async function viewPrayer(which) {
-  const t = today();
+async function viewPrayer(which, t = today()) {
   $app.classList.add('reader-mode');
   autoMusic();
   let prayer;
@@ -613,7 +626,7 @@ async function viewPrayer(which) {
         </div>
         <div class="prayer-foot">
           ${done
-            ? `<button class="btn primary block" data-action="amen" data-which="${which}">Amen</button>`
+            ? `<button class="btn primary block" data-action="amen" data-which="${which}" data-date="${t}">Amen</button>`
             : `<button class="btn primary block" data-action="pray-next">${typeof lines[i] === 'object' ? 'Continue' : 'Next'}</button>`}
           <div class="prayer-dots">${lines.map((_, k) => `<i class="${k <= i ? 'on' : ''}"></i>`).join('')}</div>
         </div>
@@ -872,13 +885,15 @@ function route() {
   $app.classList.remove('reader-mode');
   if (!state.onboarded) return viewWelcome();
   const [, view, a, b] = (location.hash || '#/today').split('/');
-  if (view === 'devo') { const n = nextDevoStep(); location.replace(n || '#/today'); return; }
+  const isDate = (x) => /^\d{4}-\d{2}-\d{2}$/.test(x || '');
+  if (view === 'devo') { const d = isDate(a) ? a : today(); const n = nextDevoStep(d); location.replace(n || dayHref(d)); return; }
   const reader = view === 'read' || view === 'pray';
   $tabs.hidden = reader;
   if (!reader && music.isPlaying()) { music.stop(); }
-  $tabs.querySelectorAll('a').forEach((x) => x.classList.toggle('on', x.dataset.tab === (view || 'today')));
+  $tabs.querySelectorAll('a').forEach((x) => x.classList.toggle('on', x.dataset.tab === (view === 'day' ? 'today' : view || 'today')));
   if (!reader) window.scrollTo(0, 0);
-  if (view === 'pray') return viewPrayer(a === 'close' ? 'close' : 'open');
+  if (view === 'pray') return viewPrayer(a === 'close' ? 'close' : 'open', isDate(b) && b > today() ? b : today());
+  if (view === 'day') return viewToday(isDate(a) ? a : today());
   if (reader) return viewReader(a, b);
   if (view === 'journey') return viewJourney();
   if (view === 'settings') { viewSettings(); fillSavedNote(); return; }
@@ -887,7 +902,7 @@ function route() {
 }
 
 function toggle(track, key, on, fromReader = false) {
-  const before = readingsFor(state.startDate, today()).every((r) => isDone(r.track, r.key));
+  const before = readingsFor(state.startDate, dateOfReading(track, key)).every((r) => isDone(r.track, r.key));
   setDone(track, key, on);
   if (on) { haptic(); afterMark(track, key, before, fromReader); }
   scheduleReminders();
@@ -913,16 +928,18 @@ document.addEventListener('click', async (e) => {
     const on = !isDone(track, key);
     toggle(track, key, on, true);
     if (!on) return route();
-    const next = nextUnreadToday();
+    const day = dateOfReading(track, key);
+    const dayList = readingsFor(state.startDate, day);
+    const next = dayList.find((r) => !isDone(r.track, r.key)) || (day <= today() ? nextUnreadToday() : null);
     const foot = el.parentElement;
-    const isToday = readingsFor(state.startDate, today()).some((x) => x.track === track && x.key === key);
+    const isToday = day >= today();
     el.outerHTML = `<button class="btn primary block mark-btn done" data-mark="${track}|${key}">${icon('check').replace('<svg', '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="3"')} Read</button>`;
-    if (isToday && !readingsFor(state.startDate, today()).some((x) => !isDone(x.track, x.key)) && !prayed(today(), 'close')) {
-      foot.insertAdjacentHTML('afterbegin', `<a class="btn block rise" style="margin-bottom:10px" href="#/pray/close">${icon('pray').replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"')} Continue to closing prayer</a>`);
+    if (isToday && !dayList.some((x) => !isDone(x.track, x.key)) && !prayed(day, 'close')) {
+      foot.insertAdjacentHTML('afterbegin', `<a class="btn block rise" style="margin-bottom:10px" href="#/pray/close${daySuffix(day)}">${icon('pray').replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"')} Continue to closing prayer</a>`);
     } else if (next) {
       foot.insertAdjacentHTML('afterbegin', `<a class="btn block rise t-${next.track}" style="margin-bottom:10px;border-color:var(--c)" href="#/read/${next.track}/${next.key}">Next: ${esc(label(next.range))} ${icon('arrow').replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"')}</a>`);
     } else {
-      foot.insertAdjacentHTML('afterbegin', `<a class="btn block rise" style="margin-bottom:10px" href="#/today">Back to today</a>`);
+      foot.insertAdjacentHTML('afterbegin', `<a class="btn block rise" style="margin-bottom:10px" href="${dayHref(day > today() ? day : today())}">${day > today() ? `Back to Day ${planDayFor(state.startDate, day)}` : 'Back to today'}</a>`);
     }
     return;
   }
@@ -960,15 +977,16 @@ document.addEventListener('click', async (e) => {
   }
   if (a === 'amen') {
     const which = el.dataset.which;
-    setPrayed(today(), which); haptic('success');
+    const day = el.dataset.date || today();
+    setPrayed(day, which); haptic('success');
     if (which === 'open') {
-      const r = readingsFor(state.startDate, today()).find((x) => !isDone(x.track, x.key));
-      location.hash = r ? `#/read/${r.track}/${r.key}` : '#/today';
+      const r = readingsFor(state.startDate, day).find((x) => !isDone(x.track, x.key));
+      location.hash = r ? `#/read/${r.track}/${r.key}` : dayHref(day);
     } else {
-      location.hash = '#/today';
-      if (pendingCelebration || readingsFor(state.startDate, today()).every((x) => isDone(x.track, x.key))) {
+      location.hash = dayHref(day);
+      if (pendingCelebration || readingsFor(state.startDate, day).every((x) => isDone(x.track, x.key))) {
         pendingCelebration = false;
-        setTimeout(() => celebrate(checkBadges()), 450);
+        setTimeout(() => celebrate(checkBadges(), day), 450);
       }
     }
   }

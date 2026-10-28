@@ -508,3 +508,5 @@ body { background: var(--page-bg); background-attachment: fixed; }
 .tr-opt.on span, .tr-opt.on i { color: var(--on-accent); opacity: .8; }
 .sheet-row { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; }
 .sheet .seg-ctl button[disabled] { color: var(--text); opacity: 1; }
+
+.read-ahead { border-color: color-mix(in srgb, var(--flame-hi) 60%, var(--line)); }
