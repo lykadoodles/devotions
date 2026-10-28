@@ -97,10 +97,15 @@ export const openingFor = (date) => {
 };
 
 // Builds the closing prayer from the day's readings and their prayer lines.
-export function closingPrayer(items) {
+export function closingPrayer(items, requests = []) {
   const lines = ['Father, thank you for speaking to me through your Word today.'];
   for (const it of items) if (it.pray) lines.push(it.pray);
   lines.push({ silence: 'Tell God one thing you are taking with you from today.' });
+  if (requests.length) {
+    lines.push('Lord, I also bring these requests to you:');
+    for (const r of requests) lines.push({ request: r.text, who: r.who });
+    lines.push('You hear me when I pray. I trust you with every answer.');
+  }
   const applies = items.filter((it) => it.apply).length;
   if (applies) lines.push('Give me grace to live out what I have learned, not just today but every day.');
   lines.push('Let your Word be a lamp to my feet and a light to my path.');

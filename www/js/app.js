@@ -9,6 +9,7 @@ import { rhemaRange, dailyIndex, randomIndex } from './rhema.js';
 import { loadDevo, devoFor } from './devo.js';
 import { openingFor, closingPrayer } from './prayers.js';
 import * as music from './music.js';
+import * as PL from './prayerlist.js';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -180,6 +181,8 @@ const BADGES = [
   { id: 'nt', name: 'New Covenant', desc: 'The whole New Testament', icon: 'cross', test: () => range(39, 65).every(bookDone) },
   { id: 'ot', name: 'Old Covenant', desc: 'The whole Old Testament', icon: 'scroll', test: () => range(0, 38).every(bookDone) },
   { id: 's365', name: 'Year of Grace', desc: '365-day streak', icon: 'crown', test: () => longestStreak() >= 365 },
+  { id: 'answered', name: 'He Answers', desc: 'Mark your first answered prayer', icon: 'star', test: () => PL.answered().length >= 1 },
+  { id: 'intercessor', name: 'Faithful Intercessor', desc: 'Pray for requests 50 times', icon: 'pray', test: () => PL.totalPrayed() >= 50 },
   { id: 'bible', name: 'The Whole Story', desc: 'Every book of the Bible', icon: 'crown', test: () => range(0, 65).every(bookDone) },
 ];
 function checkBadges() {
@@ -482,6 +485,62 @@ async function loadRhema(idx = currentRhemaIndex()) {
   }
 }
 
+// ---------- prayer list ----------
+let showAnswered = false;
+function viewPrayerList() {
+  const act = PL.active();
+  const ans = PL.answered();
+  const todayIds = new Set(PL.forToday().map((p) => p.id));
+  const card = (p) => `
+    <div class="pcard ${p.answered ? 'answered' : ''} rise" data-id="${p.id}">
+      <div class="pc-body">
+        <div class="pc-text">${esc(p.text)}</div>
+        <div class="pc-meta">${p.who ? `<span class="pc-who">${esc(p.who)}</span> · ` : ''}${p.answered
+          ? `Answered ${esc(fmtDate(p.answered.date, { month: 'short', day: 'numeric', year: 'numeric' }))}`
+          : `Added ${esc(fmtDate(p.created, { month: 'short', day: 'numeric' }))}${p.prayedCount ? ` · prayed ${p.prayedCount}×` : ''}${todayIds.has(p.id) ? ' · <span class="pc-today">in today’s prayer</span>' : ''}`}</div>
+        ${p.answered?.note ? `<div class="pc-note">“${esc(p.answered.note)}”</div>` : ''}
+      </div>
+      <div class="pc-actions">
+        ${p.answered ? '' : `<button class="pc-btn ${p.lastPrayed === today() ? 'on' : ''}" data-action="pl-prayed" data-id="${p.id}">${icon('pray')}<span>${p.lastPrayed === today() ? 'Prayed' : 'Pray'}</span></button>
+        <button class="pc-btn" data-action="pl-answer" data-id="${p.id}">${icon('check')}<span>Answered</span></button>`}
+        <button class="pc-btn more" data-action="pl-menu" data-id="${p.id}" aria-label="More options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+      </div>
+    </div>`;
+  $app.innerHTML = `
+    <header class="top rise"><div>
+      <div class="eyebrow">Philippians 4:6</div>
+      <h1 class="h1">Prayer list</h1>
+      <p class="muted" style="margin:6px 0 0">${act.length ? `${act.length} request${act.length > 1 ? 's' : ''} · a few are added to your closing prayer each day` : 'Bring every request to God. A few are added to your closing prayer each day.'}</p>
+    </div></header>
+
+    <form class="padd rise" data-form="pl-add" autocomplete="off">
+      <textarea id="pl-text" rows="2" placeholder="What would you like to pray for?" maxlength="300"></textarea>
+      <div class="padd-row">
+        <input id="pl-who" type="text" placeholder="For whom? (optional)" maxlength="60">
+        <button class="btn primary small" type="submit">Add</button>
+      </div>
+    </form>
+
+    ${ans.length ? `<div class="answered-banner rise"><b>${ans.length}</b> answered prayer${ans.length > 1 ? 's' : ''}. God is faithful.</div>` : ''}
+
+    <div class="section">
+      <div class="section-head"><div class="h2">Praying for</div><span class="muted" style="font-size:13px">${act.length}</span></div>
+      ${act.length ? `<div class="plist">${act.map(card).join('')}</div>` : `<p class="help" style="text-align:center;margin:18px 0">No requests yet. Add your first one above.</p>`}
+    </div>
+
+    ${ans.length ? `
+    <div class="section">
+      <button class="section-head as-btn" data-action="pl-toggle-answered"><div class="h2">Answered</div><span class="muted" style="font-size:13px">${showAnswered ? 'Hide' : `Show ${ans.length}`}</span></button>
+      ${showAnswered ? `<div class="plist">${ans.map(card).join('')}</div>` : ''}
+    </div>` : ''}
+  `;
+}
+
+function plSheet(html) {
+  const close = modal(`<div style="text-align:left">${html}</div>`);
+  return close;
+}
+
 function viewCatchup() {
   const miss = ahead ? [] : missed();
   const groups = {};
@@ -597,11 +656,13 @@ async function viewPrayer(which, t = today()) {
   $app.classList.add('reader-mode');
   autoMusic();
   let prayer;
+  viewPrayer.requests = [];
   if (which === 'open') prayer = openingFor(t);
   else {
     await loadDevo();
     const items = readingsFor(state.startDate, t).map((r) => devoFor(r.track, r.key)).filter(Boolean);
-    prayer = closingPrayer(items);
+    viewPrayer.requests = PL.forToday();
+    prayer = closingPrayer(items, viewPrayer.requests);
   }
   const lines = prayer.lines;
   let i = 0;
@@ -622,12 +683,14 @@ async function viewPrayer(which, t = today()) {
         <div class="prayer-lines">
           ${shown.map((l, k) => typeof l === 'string'
             ? `<p class="pl ${k === i ? 'current' : ''}">${esc(l)}</p>`
-            : `<div class="pl silence ${k === i ? 'current' : ''}"><div class="breath"></div><span>${esc(l.silence)}</span></div>`).join('')}
+            : l.request
+              ? `<div class="pl request ${k === i ? 'current' : ''}"><span class="req-icon">${icon('pray')}</span><div><b>${esc(l.request)}</b>${l.who ? `<small>for ${esc(l.who)}</small>` : ''}</div></div>`
+              : `<div class="pl silence ${k === i ? 'current' : ''}"><div class="breath"></div><span>${esc(l.silence)}</span></div>`).join('')}
         </div>
         <div class="prayer-foot">
           ${done
-            ? `<button class="btn primary block" data-action="amen" data-which="${which}" data-date="${t}">Amen</button>`
-            : `<button class="btn primary block" data-action="pray-next">${typeof lines[i] === 'object' ? 'Continue' : 'Next'}</button>`}
+            ? `<button class="btn primary block" data-action="amen" data-which="${which}" data-date="${t}" data-req="${viewPrayer.requests.map((r) => r.id).join(',')}">Amen</button>`
+            : `<button class="btn primary block" data-action="pray-next">${lines[i]?.silence ? 'Continue' : 'Next'}</button>`}
           <div class="prayer-dots">${lines.map((_, k) => `<i class="${k <= i ? 'on' : ''}"></i>`).join('')}</div>
         </div>
       </div>`;
@@ -898,6 +961,7 @@ function route() {
   if (view === 'journey') return viewJourney();
   if (view === 'settings') { viewSettings(); fillSavedNote(); return; }
   if (view === 'catchup') return viewCatchup();
+  if (view === 'prayer') return viewPrayerList();
   return viewToday();
 }
 
@@ -968,6 +1032,52 @@ document.addEventListener('click', async (e) => {
     if (location.hash.startsWith('#/settings')) route();
   }
   if (a === 'reading-sheet') openReadingSheet();
+  if (a === 'pl-prayed') {
+    const p = PL.byId(el.dataset.id);
+    if (p && p.lastPrayed !== today()) { PL.markPrayed([p.id]); haptic(); toast('Prayed ✦'); showBadges(checkBadges()); }
+    viewPrayerList();
+  }
+  if (a === 'pl-toggle-answered') { showAnswered = !showAnswered; viewPrayerList(); }
+  if (a === 'pl-answer') {
+    const p = PL.byId(el.dataset.id);
+    if (!p) return;
+    const close = plSheet(`
+      <div class="eyebrow">Answered prayer</div>
+      <div class="h2" style="margin:6px 0 12px">${esc(p.text)}</div>
+      <textarea id="pl-note" class="field" rows="3" placeholder="How did God answer? (optional)" maxlength="300"></textarea>
+      <button class="btn primary block" data-action="pl-answer-save" data-id="${p.id}" style="margin-top:12px">Praise God, it’s answered</button>
+      <button class="btn block" data-close style="margin-top:8px">Not yet</button>`);
+    viewPrayerList.closeSheet = close;
+  }
+  if (a === 'pl-answer-save') {
+    PL.markAnswered(el.dataset.id, document.getElementById('pl-note')?.value || '');
+    viewPrayerList.closeSheet?.();
+    haptic('success'); confetti(.6);
+    showAnswered = true; viewPrayerList();
+    setTimeout(() => showBadges(checkBadges()), 600);
+  }
+  if (a === 'pl-menu') {
+    const p = PL.byId(el.dataset.id);
+    if (!p) return;
+    const close = plSheet(`
+      <div class="eyebrow">Edit request</div>
+      <textarea id="pl-edit-text" class="field" rows="3" maxlength="300">${esc(p.text)}</textarea>
+      <input id="pl-edit-who" class="field" type="text" placeholder="For whom? (optional)" maxlength="60" value="${esc(p.who || '')}">
+      <button class="btn primary block" data-action="pl-edit-save" data-id="${p.id}" style="margin-top:12px">Save</button>
+      ${p.answered ? `<button class="btn block" data-action="pl-unanswer" data-id="${p.id}" style="margin-top:8px">Move back to praying</button>` : ''}
+      <button class="btn block danger" data-action="pl-delete" data-id="${p.id}" style="margin-top:8px">Delete</button>`);
+    viewPrayerList.closeSheet = close;
+  }
+  if (a === 'pl-edit-save') {
+    const text = document.getElementById('pl-edit-text').value.trim();
+    if (text) PL.update(el.dataset.id, { text, who: document.getElementById('pl-edit-who').value.trim() });
+    viewPrayerList.closeSheet?.(); viewPrayerList();
+  }
+  if (a === 'pl-unanswer') { PL.unanswer(el.dataset.id); viewPrayerList.closeSheet?.(); viewPrayerList(); }
+  if (a === 'pl-delete') {
+    if (el.dataset.confirm) { PL.remove(el.dataset.id); viewPrayerList.closeSheet?.(); viewPrayerList(); toast('Request deleted'); }
+    else { el.dataset.confirm = '1'; el.textContent = 'Tap again to delete'; }
+  }
   if (a === 'pray-next') viewPrayer.next?.();
   if (a === 'music-pref') {
     state.music ||= { on: false, vol: 0.6 };
@@ -979,6 +1089,7 @@ document.addEventListener('click', async (e) => {
     const which = el.dataset.which;
     const day = el.dataset.date || today();
     setPrayed(day, which); haptic('success');
+    if (el.dataset.req) PL.markPrayed(el.dataset.req.split(',').filter(Boolean));
     if (which === 'open') {
       const r = readingsFor(state.startDate, day).find((x) => !isDone(x.track, x.key));
       location.hash = r ? `#/read/${r.track}/${r.key}` : dayHref(day);
@@ -1061,6 +1172,16 @@ document.addEventListener('click', async (e) => {
   }
   if (a === 'new-year') {
     state.done.ot = {}; state.done.nt = {}; state.done.ps = {}; state.startDate = today(); save(); confetti(); route();
+  }
+});
+
+document.addEventListener('submit', (e) => {
+  if (e.target.dataset.form === 'pl-add') {
+    e.preventDefault();
+    const text = document.getElementById('pl-text').value;
+    const who = document.getElementById('pl-who').value;
+    if (PL.add(text, who)) { haptic(); toast('Added to your prayer list'); viewPrayerList(); }
+    else document.getElementById('pl-text').focus();
   }
 });
 

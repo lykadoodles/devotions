@@ -18,6 +18,7 @@ const DEFAULTS = () => ({
   readFont: 'serif',
   music: { on: false, vol: 0.6 },
   prayed: {},
+  prayers: [],
   reminder: { on: false, time: '06:00' },
   // done[track][key] = date it was marked read
   done: { ot: {}, nt: {}, ps: {}, pr: {} },
