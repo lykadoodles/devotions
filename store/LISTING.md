@@ -35,6 +35,7 @@ STAY MOTIVATED
 • A streak flame that grows the longer you keep reading
 • A four-part ring that lights up as you finish each reading, with a celebration when your lamp is full
 • Catch up easily on anything you missed
+• Finished early and want more? Read ahead to the next day
 • Gentle daily reminders that list the day's passages
 
 SEE YOUR PROGRESS
