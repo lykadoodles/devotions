@@ -27,6 +27,17 @@ THE WHOLE BIBLE IN A YEAR
 • Proverbs: the chapter that matches today's date, so you read Proverbs 12 times a year
 • Each day's readings are balanced by length, so no day is much heavier than another
 
+HIGHLIGHT, JOURNAL AND SHARE
+• Tap any verse to highlight it in five colors
+• Write a heart note: what God is saying to you, saved with the verse and date
+• Look back in your Journal at every verse that spoke to you
+• Copy or share any verse with friends
+
+PRAYER LIST
+• Keep a list of prayer requests, with who they're for
+• A few requests are added to your closing prayer each day
+• Mark prayers answered and record how God answered
+
 RHEMA FOR TODAY
 • A fresh encouraging verse every day
 • Shuffle for another, or share it with a friend

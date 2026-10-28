@@ -1,7 +1,7 @@
 import {
   loadPlan, META, PLAN, DAYS, PR_BOOK, PS_BOOK, TRACKS, TRACK_ORDER, today, addDays, diffDays, fmtDate,
   planDayFor, readingsFor, readingFor, label, verseCount, minutes, proverbsChapters,
-  BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES,
+  BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES, chapters,
 } from './plan.js';
 import { state, load, save, reset, isDone, setDone, streak, longestStreak, isLit, LIT, setLitHook } from './store.js';
 import { passage, prefetch, savedCount, testKey, hasBuiltInKey, verseText, verseTextOnline, wantsOnline, NOTICES, TRANSLATIONS, TRANSLATION_ORDER, current as currentTranslation } from './text.js';
@@ -10,6 +10,7 @@ import { loadDevo, devoFor } from './devo.js';
 import { openingFor, closingPrayer } from './prayers.js';
 import * as music from './music.js';
 import * as PL from './prayerlist.js';
+import * as J from './journal.js';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -183,6 +184,8 @@ const BADGES = [
   { id: 's365', name: 'Year of Grace', desc: '365-day streak', icon: 'crown', test: () => longestStreak() >= 365 },
   { id: 'answered', name: 'He Answers', desc: 'Mark your first answered prayer', icon: 'star', test: () => PL.answered().length >= 1 },
   { id: 'intercessor', name: 'Faithful Intercessor', desc: 'Pray for requests 50 times', icon: 'pray', test: () => PL.totalPrayed() >= 50 },
+  { id: 'heartnote', name: 'Treasured Word', desc: 'Write your first heart note', icon: 'book', test: () => J.noteCount() >= 1 },
+  { id: 'notes10', name: 'Heart Journal', desc: 'Write ten heart notes', icon: 'book', test: () => J.noteCount() >= 10 },
   { id: 'bible', name: 'The Whole Story', desc: 'Every book of the Bible', icon: 'crown', test: () => range(0, 65).every(bookDone) },
 ];
 function checkBadges() {
@@ -605,6 +608,9 @@ async function viewReader(track, key) {
       <p class="copyright">${NOTICES[res.translation] || ''}</p>
     </div>`;
   window.scrollTo(0, 0);
+  readerTr = res.translation;
+  tagVerses(document.querySelector('.scripture'), r.range);
+  paintVerses();
   const prog = document.getElementById('rprog');
   const onScroll = () => {
     const h = document.documentElement.scrollHeight - innerHeight;
@@ -612,6 +618,144 @@ async function viewReader(track, key) {
   };
   onScroll();
   window.onscroll = onScroll;
+}
+
+// ---------- verse selection, highlights, heart notes ----------
+let readerTr = '';
+const selected = new Set();
+
+// Wrap each verse's words in <span class="v" data-k="book.chapter.verse">, for any translation's markup
+function tagVerses(root, range) {
+  if (!root) return;
+  const chs = chapters(range);
+  let ci = -1, cur = 0;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+  const texts = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (n.nodeType === 1) {
+      if (n.matches('h2.ch-title')) { ci++; cur = chs[ci]?.v1 || 1; }
+      else if (n.matches('sup.vn')) { const v = parseInt(n.textContent, 10); if (v) cur = v; }
+      continue;
+    }
+    if (ci < 0 || !chs[ci] || !n.textContent.trim() || n.parentElement.closest('h1,h2,h3,h4,sup')) continue;
+    texts.push([n, chs[ci].b, chs[ci].c, cur]);
+  }
+  for (const [t, b, c, v] of texts) {
+    const sp = document.createElement('span');
+    sp.className = 'v';
+    sp.dataset.k = J.keyOf(b, c, v);
+    t.replaceWith(sp);
+    sp.appendChild(t);
+  }
+}
+
+function paintVerses() {
+  const lastSpan = {};
+  document.querySelectorAll('.scripture span.v').forEach((sp) => {
+    const k = sp.dataset.k;
+    const h = J.highlightOf(k);
+    sp.style.setProperty('--hl', h ? J.COLORS[h.color] || '' : '');
+    sp.classList.toggle('hl', !!h);
+    sp.classList.toggle('sel', selected.has(k));
+    sp.classList.remove('note-end');
+    lastSpan[k] = sp;
+  });
+  for (const [k, sp] of Object.entries(lastSpan)) if (J.notesFor(k).length) sp.classList.add('note-end');
+}
+
+function selectedItems() {
+  const by = {};
+  document.querySelectorAll('.scripture span.v').forEach((sp) => {
+    if (selected.has(sp.dataset.k)) by[sp.dataset.k] = (by[sp.dataset.k] || '') + sp.textContent;
+  });
+  return Object.keys(by).sort(J.compareKeys).map((k) => ({ k, text: by[k].replace(/\s+/g, ' ').trim() }));
+}
+
+function shareText(items) {
+  return `${J.quote(items.map((i) => i.text).join(' '))}\n— ${J.refOf(items.map((i) => i.k))}${readerTr ? ` (${readerTr})` : ''}`;
+}
+
+function renderVerseBar() {
+  let bar = document.getElementById('vbar');
+  if (!selected.size) { bar?.remove(); return; }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'vbar'; bar.className = 'vbar'; document.body.appendChild(bar); }
+  const items = selectedItems();
+  const allHl = items.length && items.every((i) => J.highlightOf(i.k));
+  bar.innerHTML = `
+    <div class="vbar-top"><b>${esc(J.refOf(items.map((i) => i.k)))}</b>
+      <button class="icon-btn" data-action="v-clear" aria-label="Clear selection"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="vbar-colors">
+      ${Object.entries(J.COLORS).map(([name, hex]) => `<button class="swatch" style="--sw:${hex}" data-action="v-hl" data-color="${name}" aria-label="Highlight ${name}"></button>`).join('')}
+      ${allHl ? `<button class="swatch clear" data-action="v-hl" data-color="" aria-label="Remove highlight"><svg viewBox="0 0 24 24"><path d="M5 19L19 5"/></svg></button>` : ''}
+    </div>
+    <div class="vbar-actions">
+      <button data-action="v-note">${icon('book')}<span>Note</span></button>
+      <button data-action="v-copy"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>Copy</span></button>
+      <button data-action="v-share">${icon('share')}<span>Share</span></button>
+    </div>`;
+}
+
+function clearSelection() { selected.clear(); paintVerses(); renderVerseBar(); }
+
+async function shareVerses(text, title) {
+  const Sh = P().Share;
+  try {
+    if (Sh) await Sh.share({ title, text, dialogTitle: 'Share' });
+    else if (navigator.share) await navigator.share({ text });
+    else { await navigator.clipboard.writeText(text); toast('Copied'); }
+  } catch {}
+}
+
+// tap a verse to select / unselect it
+document.addEventListener('click', (e) => {
+  const sp = e.target.closest('.scripture span.v');
+  if (!sp || e.target.closest('a,button')) return;
+  const k = sp.dataset.k;
+  if (selected.has(k)) selected.delete(k); else selected.add(k);
+  haptic();
+  paintVerses();
+  renderVerseBar();
+});
+
+// ---------- journal ----------
+let journalTab = 'notes';
+function viewJournal() {
+  const notes = J.allNotes();
+  const hls = J.allHighlights();
+  const noteCard = (n) => `
+    <div class="jcard rise" style="--jc:${n.color ? J.COLORS[n.color] : 'var(--flame-hi)'}">
+      <div class="jc-head"><b>${esc(n.ref)}</b><span>${esc(fmtDate(n.date, { month: 'short', day: 'numeric', year: 'numeric' }))}${n.tr ? ` · ${esc(n.tr)}` : ''}</span></div>
+      <p class="jc-verse">${esc(J.quote(n.text))}</p>
+      ${n.note ? `<p class="jc-note">${esc(n.note)}</p>` : ''}
+      <div class="pc-actions">
+        <button class="pc-btn" data-action="j-share" data-id="${n.id}">${icon('share')}<span>Share</span></button>
+        <button class="pc-btn more" data-action="j-menu" data-id="${n.id}" aria-label="More"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+      </div>
+    </div>`;
+  const hlCard = (h) => `
+    <div class="jcard hlcard rise" style="--jc:${J.COLORS[h.color] || 'var(--flame-hi)'}">
+      <div class="jc-head"><b>${esc(J.refOf([h.k]))}</b><span>${esc(fmtDate(h.date, { month: 'short', day: 'numeric' }))}${h.tr ? ` · ${esc(h.tr)}` : ''}</span></div>
+      <p class="jc-verse">${esc(h.text)}</p>
+      <div class="pc-actions">
+        <button class="pc-btn" data-action="h-share" data-k="${h.k}">${icon('share')}<span>Share</span></button>
+        <button class="pc-btn more" data-action="h-remove" data-k="${h.k}" aria-label="Remove highlight"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+    </div>`;
+  $app.innerHTML = `
+    <header class="top rise"><div>
+      <a class="eyebrow" href="#/journey">← Journey</a>
+      <h1 class="h1">Journal</h1>
+      <p class="muted" style="margin:6px 0 0">The verses that spoke to you, and what they meant.</p>
+    </div></header>
+    <div class="seg-ctl jtabs rise">
+      <button class="${journalTab === 'notes' ? 'on' : ''}" data-action="j-tab" data-tab="notes">Heart notes · ${notes.length}</button>
+      <button class="${journalTab === 'hl' ? 'on' : ''}" data-action="j-tab" data-tab="hl">Highlights · ${hls.length}</button>
+    </div>
+    <div class="plist" style="margin-top:16px">
+      ${journalTab === 'notes'
+        ? (notes.length ? notes.map(noteCard).join('') : `<p class="help" style="text-align:center;margin:24px 8px">No notes yet. While reading, tap a verse that speaks to you, then tap <b>Note</b>.</p>`)
+        : (hls.length ? hls.map(hlCard).join('') : `<p class="help" style="text-align:center;margin:24px 8px">No highlights yet. While reading, tap a verse and pick a color.</p>`)}
+    </div>`;
 }
 
 // ---------- reading options sheet ----------
@@ -758,6 +902,12 @@ function viewJourney() {
       <div class="card stat"><b>${best}</b><span>Best streak</span></div>
       <div class="card stat"><b>${lit}</b><span>Full days</span></div>
     </div>
+
+    <a class="card section journal-card rise" href="#/journal">
+      <div class="jl-icon">${icon('book')}</div>
+      <div class="t"><b>Your journal</b><span>${J.noteCount()} heart note${J.noteCount() === 1 ? '' : 's'} · ${J.highlightCount()} highlighted verse${J.highlightCount() === 1 ? '' : 's'}</span></div>
+      <div class="icon-btn">${icon('arrow')}</div>
+    </a>
 
     <div class="section">
       <div class="section-head"><div class="h2">Four streams</div></div>
@@ -945,6 +1095,7 @@ async function scheduleReminders() {
 // ---------- router ----------
 function route() {
   window.onscroll = null;
+  selected.clear(); document.getElementById('vbar')?.remove();
   $app.classList.remove('reader-mode');
   if (!state.onboarded) return viewWelcome();
   const [, view, a, b] = (location.hash || '#/today').split('/');
@@ -953,7 +1104,7 @@ function route() {
   const reader = view === 'read' || view === 'pray';
   $tabs.hidden = reader;
   if (!reader && music.isPlaying()) { music.stop(); }
-  $tabs.querySelectorAll('a').forEach((x) => x.classList.toggle('on', x.dataset.tab === (view === 'day' ? 'today' : view || 'today')));
+  $tabs.querySelectorAll('a').forEach((x) => x.classList.toggle('on', x.dataset.tab === (view === 'day' ? 'today' : view === 'journal' ? 'journey' : view || 'today')));
   if (!reader) window.scrollTo(0, 0);
   if (view === 'pray') return viewPrayer(a === 'close' ? 'close' : 'open', isDate(b) && b > today() ? b : today());
   if (view === 'day') return viewToday(isDate(a) ? a : today());
@@ -962,6 +1113,7 @@ function route() {
   if (view === 'settings') { viewSettings(); fillSavedNote(); return; }
   if (view === 'catchup') return viewCatchup();
   if (view === 'prayer') return viewPrayerList();
+  if (view === 'journal') return viewJournal();
   return viewToday();
 }
 
@@ -1032,6 +1184,65 @@ document.addEventListener('click', async (e) => {
     if (location.hash.startsWith('#/settings')) route();
   }
   if (a === 'reading-sheet') openReadingSheet();
+  if (a === 'v-clear') clearSelection();
+  if (a === 'v-hl') {
+    J.setHighlight(selectedItems(), el.dataset.color || null, readerTr);
+    haptic(); toast(el.dataset.color ? 'Highlighted' : 'Highlight removed');
+    clearSelection();
+  }
+  if (a === 'v-copy') {
+    try { await navigator.clipboard.writeText(shareText(selectedItems())); toast('Copied'); } catch { toast('Couldn’t copy'); }
+    clearSelection();
+  }
+  if (a === 'v-share') { const items = selectedItems(); await shareVerses(shareText(items), J.refOf(items.map((i) => i.k))); clearSelection(); }
+  if (a === 'v-note') {
+    const items = selectedItems();
+    const ref = J.refOf(items.map((i) => i.k));
+    const close = modal(`<div style="text-align:left">
+      <div class="eyebrow">${esc(ref)}</div>
+      <p class="jc-verse" style="margin:8px 0 12px">${esc(J.quote(items.map((i) => i.text).join(' ').slice(0, 280) + (items.map((i) => i.text).join(' ').length > 280 ? '…' : '')))}</p>
+      <textarea id="v-note-text" class="field" rows="4" placeholder="What is God saying to you through this?" maxlength="1000"></textarea>
+      <button class="btn primary block" data-action="v-note-save" style="margin-top:12px">Save to my journal</button>
+      <button class="btn block" data-close style="margin-top:8px">Cancel</button></div>`);
+    viewJournal.pending = { items, close };
+    setTimeout(() => document.getElementById('v-note-text')?.focus(), 200);
+  }
+  if (a === 'v-note-save' && viewJournal.pending) {
+    const { items, close } = viewJournal.pending;
+    const txt = document.getElementById('v-note-text')?.value || '';
+    const color = items.map((i) => J.highlightOf(i.k)?.color).find(Boolean) || 'yellow';
+    J.addNote(items, txt, color, readerTr);
+    J.setHighlight(items.filter((i) => !J.highlightOf(i.k)), color, readerTr);
+    viewJournal.pending = null; close();
+    haptic('success'); toast('Saved to your journal');
+    clearSelection();
+    showBadges(checkBadges());
+  }
+  if (a === 'j-tab') { journalTab = el.dataset.tab; viewJournal(); }
+  if (a === 'j-share') {
+    const n = J.allNotes().find((x) => x.id === el.dataset.id);
+    if (n) await shareVerses(`${J.quote(n.text)}\n— ${n.ref}${n.tr ? ` (${n.tr})` : ''}`, n.ref);
+  }
+  if (a === 'h-share') {
+    const h = J.highlightOf(el.dataset.k);
+    if (h) await shareVerses(`${J.quote(h.text)}\n— ${J.refOf([el.dataset.k])}${h.tr ? ` (${h.tr})` : ''}`, J.refOf([el.dataset.k]));
+  }
+  if (a === 'h-remove') { J.setHighlight([{ k: el.dataset.k }], null); viewJournal(); toast('Highlight removed'); }
+  if (a === 'j-menu') {
+    const n = J.allNotes().find((x) => x.id === el.dataset.id);
+    if (!n) return;
+    const close = modal(`<div style="text-align:left">
+      <div class="eyebrow">${esc(n.ref)}</div>
+      <textarea id="j-edit" class="field" rows="5" maxlength="1000">${esc(n.note)}</textarea>
+      <button class="btn primary block" data-action="j-edit-save" data-id="${n.id}" style="margin-top:12px">Save</button>
+      <button class="btn block danger" data-action="j-delete" data-id="${n.id}" style="margin-top:8px">Delete note</button></div>`);
+    viewJournal.close = close;
+  }
+  if (a === 'j-edit-save') { J.updateNote(el.dataset.id, document.getElementById('j-edit').value); viewJournal.close?.(); viewJournal(); }
+  if (a === 'j-delete') {
+    if (el.dataset.confirm) { J.removeNote(el.dataset.id); viewJournal.close?.(); viewJournal(); toast('Note deleted'); }
+    else { el.dataset.confirm = '1'; el.textContent = 'Tap again to delete'; }
+  }
   if (a === 'pl-prayed') {
     const p = PL.byId(el.dataset.id);
     if (p && p.lastPrayed !== today()) { PL.markPrayed([p.id]); haptic(); toast('Prayed ✦'); showBadges(checkBadges()); }
