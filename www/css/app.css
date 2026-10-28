@@ -589,7 +589,7 @@ body { background: var(--page-bg); background-attachment: fixed; }
 /* emoji reactions */
 .scripture sup.vreact { font-size: .62em; line-height: 0; vertical-align: .8em; margin-left: -.12em; font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif; }
 .vbar-emoji { display: flex; justify-content: space-between; padding: 8px 2px 2px; }
-.emo { width: 38px; height: 38px; border-radius: 12px; font-size: 21px; display: grid; place-items: center; transition: transform .15s, background .2s; }
+.emo { width: 33px; height: 36px; border-radius: 11px; font-size: 19px; display: grid; place-items: center; transition: transform .15s, background .2s; }
 .emo:active { transform: scale(1.25); }
 .emo.on { background: var(--surface-2); box-shadow: inset 0 0 0 2px var(--accent); }
 .jc-emo { font-size: 17px; margin-left: 4px; }

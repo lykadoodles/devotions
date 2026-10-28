@@ -79,7 +79,7 @@ export const quote = (t) => (/^[“"‘']/.test(t) ? t : `“${t}”`);
 // ---------- emoji reactions (one per verse) ----------
 export const REACTIONS = [
   ['🙏', 'Prayer'], ['❤️', 'Love'], ['🙌', 'Praise'], ['😭', 'Moved to tears'],
-  ['🔥', 'Fired up'], ['✨', 'Revelation'], ['💡', 'Insight'], ['🕊️', 'Peace'],
+  ['😢', 'Sad'], ['💔', 'Heartbroken'], ['🔥', 'Fired up'], ['✨', 'Revelation'], ['💡', 'Insight'], ['🕊️', 'Peace'],
 ];
 const rx = () => (state.reactions ||= {});   // key -> { emoji, text, tr, date }
 export const reactionOf = (k) => rx()[k];

@@ -29,7 +29,7 @@ THE WHOLE BIBLE IN A YEAR
 
 HIGHLIGHT, JOURNAL AND SHARE
 • Tap any verse to highlight it in five colors
-• React with an emoji (🙏 ❤️ 🙌 😭 🔥 ✨ 💡 🕊️) to remember how a verse moved you
+• React with an emoji (🙏 ❤️ 🙌 😭 😢 💔 🔥 ✨ 💡 🕊️) to remember how a verse moved you
 • Write a heart note: what God is saying to you, saved with the verse and date
 • Look back in your Journal at every verse that spoke to you
 • Copy or share any verse with friends
