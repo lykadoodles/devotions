@@ -35,15 +35,25 @@ export async function load() {
   try { const p = prefs(); if (p) raw = (await p.get({ key: KEY }))?.value; } catch {}
   if (!raw) { try { raw = localStorage.getItem(KEY); } catch {} }
   if (raw) {
-    try {
-      const s = JSON.parse(raw);
-      const d = DEFAULTS();
-      Object.assign(state, d, s, {
-        done: { ...d.done, ...(s.done || {}) },
-        reminder: { ...d.reminder, ...(s.reminder || {}) },
-      });
-    } catch {}
+    try { Object.assign(state, normalize(JSON.parse(raw))); } catch {}
   }
+}
+
+// Fills in anything missing (older saves, backups) with defaults
+export function normalize(s) {
+  const d = DEFAULTS();
+  return Object.assign(d, s, {
+    done: { ...d.done, ...(s.done || {}) },
+    reminder: { ...d.reminder, ...(s.reminder || {}) },
+    music: { ...d.music, ...(s.music || {}) },
+  });
+}
+
+// Replaces everything (used when restoring a backup)
+export function replaceAll(s) {
+  for (const k of Object.keys(state)) delete state[k];
+  Object.assign(state, normalize(s));
+  save();
 }
 
 export function save() {

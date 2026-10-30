@@ -11,6 +11,7 @@ import { openingFor, closingPrayer } from './prayers.js';
 import * as music from './music.js';
 import * as PL from './prayerlist.js';
 import * as J from './journal.js';
+import * as Backup from './backup.js';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -491,6 +492,7 @@ async function loadRhema(idx = currentRhemaIndex()) {
 
 // ---------- prayer list ----------
 let showAnswered = false;
+let pendingRestore = null;
 function viewPrayerList() {
   const act = PL.active();
   const ans = PL.answered();
@@ -1034,12 +1036,19 @@ function viewSettings() {
     </div>
 
     <div class="section">
+      <div class="section-head"><div class="h2">Backup</div></div>
+      <div class="list">
+        <div class="item"><div class="t"><b>Back up to a file</b><span>${state.lastBackup ? `Last backup ${esc(fmtDate(state.lastBackup.slice(0, 10), { month: 'short', day: 'numeric', year: 'numeric' }))}` : 'No backup yet'}</span></div><button class="btn small" data-action="export">Back up</button></div>
+        <div class="item"><div class="t"><b>Restore from a file</b><span>Choose a Lamp backup (.json)</span></div><button class="btn small" data-action="import">Restore</button></div>
+      </div>
+      <p class="help">Saves your readings, streaks, badges, highlights, heart notes, reactions and prayer list in one file. Keep it in Google Drive or send it to yourself, so you can restore it on a new phone. API keys are not included.</p>
+    </div>
+
+    <div class="section">
       <div class="section-head"><div class="h2">Plan</div></div>
       <div class="list">
         <div class="item"><div class="t"><b>Your name</b></div><input type="text" id="name" value="${esc(state.name)}" placeholder="Name" style="width:150px"></div>
         <div class="item"><div class="t"><b>Start date</b><span>Day 1 of your 365</span></div><input type="date" id="start" value="${state.startDate}"></div>
-        <div class="item"><div class="t"><b>Back up progress</b><span>Copy a backup code to keep somewhere safe</span></div><button class="btn small" data-action="export">Copy</button></div>
-        <div class="item"><div class="t"><b>Restore progress</b><span>Paste a backup code</span></div><button class="btn small" data-action="import">Paste</button></div>
         <div class="item"><div class="t"><b class="danger">Reset progress</b><span>Clears readings, streaks and badges</span></div><button class="btn small" data-action="reset">Reset</button></div>
       </div>
       <p class="help">Old Testament, New Testament and Psalms are spread across 365 days by verse count. Proverbs follows the calendar (chapter = today’s date), so you read it 12 times a year.</p>
@@ -1085,6 +1094,7 @@ function viewWelcome() {
         </div>
         <input class="field" style="margin:0" id="wstart" type="date" value="${t}" hidden>
         <button class="btn primary block" data-action="begin" style="margin-top:8px">${icon('flame').replace('<svg', '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"')} Light the lamp</button>
+        <button class="restore-link" data-action="import">Coming from another phone? <b>Restore a backup</b></button>
       </div>
     </div>`;
 }
@@ -1161,7 +1171,9 @@ document.addEventListener('click', async (e) => {
     toggle(track, key, on);
     const card = el.closest('.rcard');
     card?.classList.toggle('done', on);
-    if (location.hash.includes('catchup')) setTimeout(route, 350); else setTimeout(route, on ? 380 : 0);
+    // Re-render in place: keep the reader where they were on the page
+    const rerender = () => { const y = scrollY; route(); scrollTo(0, y); };
+    if (location.hash.includes('catchup')) setTimeout(rerender, 350); else setTimeout(rerender, on ? 380 : 0);
     return;
   }
   if (el.dataset.mark) {
@@ -1404,14 +1416,34 @@ document.addEventListener('click', async (e) => {
     route();
   }
   if (a === 'export') {
-    const code = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
-    try { await navigator.clipboard.writeText(code); toast('Backup code copied'); } catch { prompt('Copy your backup code', code); }
+    try { if (await Backup.exportBackup()) { toast('Backup ready'); if (location.hash.includes('settings')) route(); } }
+    catch (err) { console.warn('backup', err); toast('Couldn’t create the backup'); }
   }
   if (a === 'import') {
-    const code = prompt('Paste your backup code');
-    if (!code) return;
-    try { const s = JSON.parse(decodeURIComponent(escape(atob(code.trim())))); Object.assign(state, s); save(); applyTheme(); toast('Progress restored'); route(); }
-    catch { toast('That code didn’t work'); }
+    const text = await Backup.pickFile();
+    if (text == null) return;
+    let b;
+    try { b = Backup.parseBackup(text); } catch { toast('That isn’t a Lamp backup file'); return; }
+    const m = Backup.summarize(b.data);
+    const when = b.exportedAt ? fmtDate(b.exportedAt.slice(0, 10), { month: 'long', day: 'numeric', year: 'numeric' }) : null;
+    const row = (n, label) => n ? `<li><b>${n}</b> ${label}${n === 1 ? '' : 's'}</li>` : '';
+    pendingRestore = b;
+    viewSettings.closeRestore = modal(`
+      <div class="eyebrow">Restore backup</div>
+      <div class="h1">${m.name ? `${esc(m.name)}’s Lamp` : 'Lamp backup'}</div>
+      <p class="muted" style="margin:4px 0 12px">${when ? `Saved ${esc(when)} · ` : ''}plan started ${esc(fmtDate(m.startDate, { month: 'short', day: 'numeric', year: 'numeric' }))}</p>
+      <ul class="restore-sum">${row(m.readings, 'reading')}${row(m.fullDays, 'full day')}${row(m.highlights, 'highlighted verse')}${row(m.notes, 'heart note')}${row(m.reactions, 'reaction')}${row(m.prayers, 'prayer request')}</ul>
+      <p style="margin:12px 0 16px">This replaces everything currently in Lamp on this phone.</p>
+      <button class="btn primary block" data-action="restore-confirm">Restore</button>
+      <button class="btn block" data-close style="margin-top:8px">Cancel</button>`);
+  }
+  if (a === 'restore-confirm' && pendingRestore) {
+    const b = pendingRestore; pendingRestore = null;
+    viewSettings.closeRestore?.();
+    Backup.restore(b.data);
+    if (b.exportedAt) { state.lastBackup = b.exportedAt; save(); }
+    applyTheme(); scheduleReminders(); route();
+    haptic('success'); confetti(.5); toast('Welcome back! Your progress is restored');
   }
   if (a === 'reset') {
     if (confirm('Reset all reading progress, streaks and badges?')) { reset(true); state.startDate = today(); save(); toast('Fresh start'); route(); }

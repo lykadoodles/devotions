@@ -21,6 +21,7 @@ That's about 15 minutes a day. The OT, NT and Psalms portions are balanced by ve
 - **Journey** page: % of the Bible read, a bookshelf of 66 books that fill in as you go, a heatmap of the year, and Proverbs progress beads (12 per year)
 - **20 badges**: streaks, the Torah, the Gospels, Paul's letters, Proverbs ×12, the whole Bible…
 - **Daily reminder** notification listing that day's passages
+- **Backup & restore** to a .json file (share to Google Drive, Gmail, Messenger…), also from the welcome screen on a new phone
 - Dark and light themes, adjustable text size, offline reading
 
 ## Translations

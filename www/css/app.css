@@ -598,3 +598,10 @@ body { background: var(--page-bg); background-attachment: fixed; }
 .emo-filter button small { font-size: 11px; color: var(--muted); margin-left: 2px; }
 .emo-filter button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .emo-filter button.on small { color: var(--on-accent); }
+
+/* restore summary */
+.restore-sum { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; text-align: left; }
+.restore-sum li { padding: 10px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.restore-sum li b { display: block; font-size: 20px; color: var(--text); }
+.restore-link { display: block; width: 100%; margin-top: 6px; padding: 10px; background: none; border: 0; color: var(--muted); font: inherit; font-size: 14px; }
+.restore-link b { color: var(--text); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
