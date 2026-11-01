@@ -98,7 +98,20 @@ function applyTheme() {
   r.style.setProperty('--read-size', `${Math.round(19 * state.fontScale)}px`);
   r.setAttribute('data-readfont', state.readFont === 'sans' ? 'sans' : 'serif');
   const dark = state.theme === 'dark' || (state.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.querySelector('meta[name=theme-color]').content = dark ? '#2a5be8' : '#f4f7ff';
+  r.setAttribute('data-page', readPage());
+  document.querySelector('meta[name=theme-color]').content = $app?.classList.contains('reader-mode') ? PAGES[readPage()].bg : dark ? '#2a5be8' : '#f4f7ff';
+}
+// Reading page colour: chosen in the reader's Aa sheet; by default follows the app theme
+const PAGES = {
+  blue: { bg: '#10236e', fg: '#ffffff', name: 'Blue' },
+  dark: { bg: '#121317', fg: '#e9e7e3', name: 'Dark' },
+  light: { bg: '#ffffff', fg: '#1d1f24', name: 'Light' },
+  sepia: { bg: '#f5ecdc', fg: '#3a2e22', name: 'Sepia' },
+};
+function readPage() {
+  if (PAGES[state.readPage]) return state.readPage;
+  const dark = state.theme === 'dark' || (state.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+  return dark ? 'blue' : 'light';
 }
 // Greetings rotate each time the app is opened (stable while navigating).
 const GREETINGS = {
@@ -570,7 +583,7 @@ async function viewReader(track, key) {
   const r = readingFor(track, key);
   if (!r) { location.hash = '#/today'; return; }
   const t = TRACKS[track];
-  $app.classList.add('reader-mode');
+  $app.classList.add('reader-mode'); applyTheme();
   const ref = label(r.range);
   const renderTop = () => `
     <div class="reader-top t-${track}">
@@ -802,6 +815,8 @@ function openReadingSheet() {
         <div class="seg-ctl"><button data-sz="-">A−</button><button disabled style="min-width:58px">${Math.round(state.fontScale * 100)}%</button><button data-sz="+">A+</button></div></div>
       <div class="sheet-row"><span class="eyebrow">Font</span>
         <div class="seg-ctl"><button class="${state.readFont !== 'sans' ? 'on' : ''}" data-rf="serif" style="font-family:var(--serif)">Serif</button><button class="${state.readFont === 'sans' ? 'on' : ''}" data-rf="sans">Sans</button></div></div>
+      <div class="sheet-row"><span class="eyebrow">Page</span>
+        <div class="page-opts">${Object.entries(PAGES).map(([k, p]) => `<button class="page-opt ${readPage() === k ? 'on' : ''}" data-pg="${k}" style="background:${p.bg};color:${p.fg}" aria-label="${p.name} page" title="${p.name}">Aa</button>`).join('')}</div></div>
       <button class="btn primary block" data-done style="margin-top:14px">Done</button>
     </div>`;
   };
@@ -816,7 +831,9 @@ function openReadingSheet() {
     const sz = e.target.closest('[data-sz]');
     if (sz) { state.fontScale = Math.max(0.8, Math.min(1.6, +(state.fontScale + (sz.dataset.sz === '+' ? 0.1 : -0.1)).toFixed(2))); save(); applyTheme(); render(); return; }
     const rf = e.target.closest('[data-rf]');
-    if (rf) { state.readFont = rf.dataset.rf; save(); applyTheme(); render(); }
+    if (rf) { state.readFont = rf.dataset.rf; save(); applyTheme(); render(); return; }
+    const pg = e.target.closest('[data-pg]');
+    if (pg) { state.readPage = pg.dataset.pg; save(); haptic(); applyTheme(); render(); }
   });
 }
 
@@ -824,7 +841,7 @@ function openReadingSheet() {
 function autoMusic() { if (state.music?.on) music.play().then(syncMusicButtons); }
 
 async function viewPrayer(which, t = today()) {
-  $app.classList.add('reader-mode');
+  $app.classList.add('reader-mode'); applyTheme();
   autoMusic();
   let prayer;
   viewPrayer.requests = [];
@@ -1131,7 +1148,7 @@ async function scheduleReminders() {
 function route() {
   window.onscroll = null;
   selected.clear(); document.getElementById('vbar')?.remove();
-  $app.classList.remove('reader-mode');
+  $app.classList.remove('reader-mode'); applyTheme();
   if (!state.onboarded) return viewWelcome();
   const [, view, a, b] = (location.hash || '#/today').split('/');
   const isDate = (x) => /^\d{4}-\d{2}-\d{2}$/.test(x || '');

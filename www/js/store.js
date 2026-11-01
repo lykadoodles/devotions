@@ -65,7 +65,7 @@ export function save() {
 export function reset(keepSettings = true) {
   const keep = keepSettings
     ? { name: state.name, translation: state.translation, nltKey: state.nltKey, esvKey: state.esvKey, theme: state.theme,
-        fontScale: state.fontScale, readFont: state.readFont, music: state.music, reminder: state.reminder, onboarded: state.onboarded }
+        fontScale: state.fontScale, readFont: state.readFont, readPage: state.readPage, music: state.music, reminder: state.reminder, onboarded: state.onboarded }
     : {};
   Object.assign(state, DEFAULTS(), keep);
   save();
