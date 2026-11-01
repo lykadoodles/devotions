@@ -666,3 +666,4 @@ body:has(#vbar) .aplayer { display: none; }
 :root[data-page] .aplayer { color: var(--text); }
 .rhema-bell.on { color: var(--flame-hi); }
 .rhema-bell.on svg { fill: currentColor; fill-opacity: .25; }
+.tr-opt i { white-space: nowrap; }

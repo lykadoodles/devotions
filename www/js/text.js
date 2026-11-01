@@ -24,6 +24,8 @@ const FALLBACK = 'BSB'; // used when an online translation is unavailable
 // The user's own key (Settings) wins; otherwise a key built into the app.
 export const nltKey = () => state.nltKey || NLT_KEY;
 export const esvKey = () => state.esvKey || ESV_KEY;
+// True when this translation can actually be shown (built in, or an API key is available)
+export const hasKey = (t) => !TRANSLATIONS[t].online || !!keyFor(t);
 export const hasBuiltInKey = (t = 'NLT') => !!(t === 'ESV' ? ESV_KEY : NLT_KEY);
 const keyFor = (t) => (t === 'ESV' ? esvKey() : t === 'NLT' ? nltKey() : '');
 export const current = () => (TRANSLATIONS[state.translation] ? state.translation : 'NLT');

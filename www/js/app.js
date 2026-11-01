@@ -4,7 +4,7 @@ import {
   BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES, chapters,
 } from './plan.js';
 import { state, load, save, reset, isDone, setDone, streak, longestStreak, isLit, LIT, setLitHook } from './store.js';
-import { passage, prefetch, savedCount, testKey, hasBuiltInKey, verseText, verseTextOnline, verseTextSaved, wantsOnline, NOTICES, TRANSLATIONS, TRANSLATION_ORDER, current as currentTranslation } from './text.js';
+import { passage, prefetch, savedCount, testKey, hasBuiltInKey, hasKey, verseText, verseTextOnline, verseTextSaved, wantsOnline, NOTICES, TRANSLATIONS, TRANSLATION_ORDER, current as currentTranslation } from './text.js';
 import { rhemaRange, dailyIndex, randomIndex } from './rhema.js';
 import { loadDevo, devoFor } from './devo.js';
 import { openingFor, closingPrayer } from './prayers.js';
@@ -594,12 +594,13 @@ async function viewReader(track, key) {
   const t = TRACKS[track];
   $app.classList.add('reader-mode'); applyTheme();
   const ref = label(r.range);
+  let shown = null; // translation actually displayed (may be a fallback)
   const renderTop = () => `
     <div class="reader-top t-${track}">
       <div class="row">
         <button class="icon-btn" data-action="back" aria-label="Back">${icon('back')}</button>
         <div class="reader-title"><div class="track">${t.name}</div><div class="ref">${esc(ref)}</div></div>
-        <button class="tr-chip" data-action="reading-sheet" aria-label="Translation and text options">${currentTranslation()}<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+        <button class="tr-chip" data-action="reading-sheet" aria-label="Translation and text options">${shown || currentTranslation()}<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
         <button class="icon-btn listen-btn" data-action="listen" aria-label="Listen to this passage">${icon('headphones')}</button>
         ${musicBtn()}
         <button class="icon-btn" data-action="reading-sheet" aria-label="Text options"><span style="font-family:var(--serif);font-size:19px;font-weight:600">Aa</span></button>
@@ -613,6 +614,7 @@ async function viewReader(track, key) {
   const dv = devoFor(track, key);
   try { res = await passage(r.range); } catch (e) { res = { html: `<p>Couldn’t load this passage. ${esc(e.message || '')}</p>`, translation: '' }; }
   if (!location.hash.startsWith(`#/read/${track}/${key}`)) return; // navigated away
+  shown = res.translation || null;
   const done = isDone(track, key);
   const contextLine = track === 'pr'
     ? `Proverbs for ${fmtDate(key, { month: 'long', day: 'numeric' })}`
@@ -820,7 +822,7 @@ function openReadingSheet() {
       <div class="eyebrow">Translation</div>
       <div class="tr-grid">
         ${TRANSLATION_ORDER.map((code) => `<button class="tr-opt ${currentTranslation() === code ? 'on' : ''}" data-tr="${code}">
-          <b>${code}</b><span>${TRANSLATIONS[code].name.replace(' Translation', '').replace(' Version', '')}</span>${TRANSLATIONS[code].online ? '<i>online</i>' : '<i>offline</i>'}
+          <b>${code}</b><span>${TRANSLATIONS[code].name.replace(' Translation', '').replace(' Version', '')}</span>${!hasKey(code) ? '<i>needs key</i>' : TRANSLATIONS[code].online ? '<i>online</i>' : '<i>offline</i>'}
         </button>`).join('')}
       </div>
       <div class="sheet-row"><span class="eyebrow">Text size</span>
@@ -839,7 +841,10 @@ function openReadingSheet() {
   o.addEventListener('click', (e) => {
     if (e.target === o || e.target.closest('[data-done]')) return close();
     const tr = e.target.closest('[data-tr]');
-    if (tr) { state.translation = tr.dataset.tr; save(); changedTr = true; haptic(); render(); return; }
+    if (tr) {
+      if (!hasKey(tr.dataset.tr)) { toast(`The ${tr.dataset.tr} needs a free API key. Add one in Settings → ${tr.dataset.tr} API key.`); return; }
+      state.translation = tr.dataset.tr; save(); changedTr = true; haptic(); render(); return;
+    }
     const sz = e.target.closest('[data-sz]');
     if (sz) { state.fontScale = Math.max(0.8, Math.min(1.6, +(state.fontScale + (sz.dataset.sz === '+' ? 0.1 : -0.1)).toFixed(2))); save(); applyTheme(); render(); return; }
     const rf = e.target.closest('[data-rf]');
@@ -1025,7 +1030,7 @@ function viewSettings() {
         ${TRANSLATION_ORDER.map((code) => `
         <button class="item tr-row ${currentTranslation() === code ? 'on' : ''}" data-set="translation" data-val="${code}">
           <span class="radio"></span>
-          <span class="t"><b>${TRANSLATIONS[code].name} <span class="tr-code">${code}</span></b><span>${TRANSLATIONS[code].desc}${TRANSLATIONS[code].online ? ' · online' : ''}</span></span>
+          <span class="t"><b>${TRANSLATIONS[code].name} <span class="tr-code">${code}</span></b><span>${TRANSLATIONS[code].desc}${!hasKey(code) ? ' · needs a free key (below)' : TRANSLATIONS[code].online ? ' · online' : ''}</span></span>
         </button>`).join('')}
         ${['NLT', 'ESV'].map((k) => `
         <div class="item" style="flex-direction:column;align-items:stretch">
