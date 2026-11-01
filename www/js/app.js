@@ -1307,7 +1307,19 @@ async function listenDay(date) {
 }
 
 // ---------- router ----------
+// Redrawing the same screen (after a toggle, a save…) keeps your place and
+// skips the entrance animation; only moving to another screen starts at the top.
+let lastRouteHash = null, settleTimer = 0;
 function route() {
+  const same = location.hash === lastRouteHash && lastRouteHash !== null;
+  lastRouteHash = location.hash;
+  const keepY = same ? scrollY : null;
+  if (!same) { $app.classList.remove('settled'); clearTimeout(settleTimer); settleTimer = setTimeout(() => $app.classList.add('settled'), 900); }
+  const out = routeView(same);
+  if (keepY != null) Promise.resolve(out).then(() => requestAnimationFrame(() => window.scrollTo(0, keepY)));
+  return out;
+}
+function routeView(same) {
   window.onscroll = null;
   readerShown = null;
   if (Audio.isActive()) {
@@ -1325,7 +1337,7 @@ function route() {
   $tabs.hidden = reader;
   if (!reader && music.isPlaying()) { music.stop(); }
   $tabs.querySelectorAll('a').forEach((x) => x.classList.toggle('on', x.dataset.tab === (view === 'day' ? 'today' : view === 'journal' ? 'journey' : view || 'today')));
-  if (!reader) window.scrollTo(0, 0);
+  if (!reader && !same) window.scrollTo(0, 0);
   if (view === 'pray') return viewPrayer(a === 'close' ? 'close' : 'open', isDate(b) && b > today() ? b : today());
   if (view === 'day') return viewToday(isDate(a) ? a : today());
   if (reader) return viewReader(a, b);
@@ -1357,7 +1369,7 @@ document.addEventListener('click', async (e) => {
     const card = el.closest('.rcard');
     card?.classList.toggle('done', on);
     // Re-render in place: keep the reader where they were on the page
-    const rerender = () => { const y = scrollY; route(); scrollTo(0, y); };
+    const rerender = () => route();
     if (location.hash.includes('catchup')) setTimeout(rerender, 350); else setTimeout(rerender, on ? 380 : 0);
     return;
   }

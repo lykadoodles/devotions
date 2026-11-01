@@ -273,6 +273,7 @@ svg { display: block; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .pop-in { animation: pop .5s cubic-bezier(.3,1.5,.5,1) both; }
 .rise { animation: rise .5s cubic-bezier(.2,.8,.2,1) both; }
+#app.settled .rise { animation: none; }
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
