@@ -20,6 +20,8 @@ const DEFAULTS = () => ({
   prayed: {},
   prayers: [],
   reminder: { on: false, time: '06:00' },
+  rhemaNotif: { on: false, time: '07:00' },
+  audioRate: 1,
   // done[track][key] = date it was marked read
   done: { ot: {}, nt: {}, ps: {}, pr: {} },
   // log[date] = number of portions marked read that day
@@ -45,6 +47,7 @@ export function normalize(s) {
   return Object.assign(d, s, {
     done: { ...d.done, ...(s.done || {}) },
     reminder: { ...d.reminder, ...(s.reminder || {}) },
+    rhemaNotif: { ...d.rhemaNotif, ...(s.rhemaNotif || {}) },
     music: { ...d.music, ...(s.music || {}) },
   });
 }
@@ -65,7 +68,7 @@ export function save() {
 export function reset(keepSettings = true) {
   const keep = keepSettings
     ? { name: state.name, translation: state.translation, nltKey: state.nltKey, esvKey: state.esvKey, theme: state.theme,
-        fontScale: state.fontScale, readFont: state.readFont, readPage: state.readPage, music: state.music, reminder: state.reminder, onboarded: state.onboarded }
+        fontScale: state.fontScale, readFont: state.readFont, readPage: state.readPage, music: state.music, reminder: state.reminder, rhemaNotif: state.rhemaNotif, audioRate: state.audioRate, onboarded: state.onboarded }
     : {};
   Object.assign(state, DEFAULTS(), keep);
   save();

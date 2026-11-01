@@ -611,25 +611,25 @@ body { background: var(--page-bg); background-attachment: fixed; }
 :root[data-page="dark"]  { --read-bg: #121317; }
 :root[data-page="light"] { --read-bg: #ffffff; }
 :root[data-page="sepia"] { --read-bg: #f5ecdc; }
-:root[data-page="blue"] #app.reader-mode, :root[data-page="blue"] .vbar {
+:root[data-page="blue"] #app.reader-mode, :root[data-page="blue"] .vbar, :root[data-page="blue"] .aplayer {
   --text: #ffffff; --muted: #c9d8ff; --faint: #8fa9f0; --line: rgba(255,255,255,.22);
   --surface: rgba(255,255,255,.10); --surface-2: rgba(255,255,255,.14);
   --flame: #ffffff; --flame-hi: #ffffff; --accent: #ffffff; --on-accent: #1d4ed8;
   --ot: #ffb38f; --nt: #6fe3ff; --ps: #8ff0b4; --pr: #ffe066; --good: #8ff0b4; color-scheme: dark;
 }
-:root[data-page="dark"] #app.reader-mode, :root[data-page="dark"] .vbar {
+:root[data-page="dark"] #app.reader-mode, :root[data-page="dark"] .vbar, :root[data-page="dark"] .aplayer {
   --text: #e9e7e3; --muted: #a3a3a8; --faint: #6f7076; --line: rgba(255,255,255,.12);
   --surface: rgba(255,255,255,.06); --surface-2: rgba(255,255,255,.10);
   --flame: #f5a742; --flame-hi: #ffd27a; --accent: #e9e7e3; --on-accent: #121317;
   --ot: #e3825f; --nt: #74a8e0; --ps: #7fbfa6; --pr: #e6c25c; --good: #8fcf8a; color-scheme: dark;
 }
-:root[data-page="light"] #app.reader-mode, :root[data-page="light"] .vbar {
+:root[data-page="light"] #app.reader-mode, :root[data-page="light"] .vbar, :root[data-page="light"] .aplayer {
   --text: #1d1f24; --muted: #5c6070; --faint: #9aa0ad; --line: #e3e5ea;
   --surface: #f4f5f8; --surface-2: #eceef3;
   --flame: #e48a1c; --flame-hi: #f5b544; --accent: #2453e6; --on-accent: #ffffff;
   --ot: #c8603c; --nt: #3f7fc4; --ps: #3f9679; --pr: #b88d14; --good: #3f9a45; color-scheme: light;
 }
-:root[data-page="sepia"] #app.reader-mode, :root[data-page="sepia"] .vbar {
+:root[data-page="sepia"] #app.reader-mode, :root[data-page="sepia"] .vbar, :root[data-page="sepia"] .aplayer {
   --text: #3a2e22; --muted: #75685a; --faint: #a89a88; --line: #e0d2b9;
   --surface: rgba(120,85,40,.07); --surface-2: #ecdfc8;
   --flame: #c9741a; --flame-hi: #e48a1c; --accent: #8a5a2b; --on-accent: #ffffff;
@@ -642,3 +642,26 @@ body { background: var(--page-bg); background-attachment: fixed; }
 .page-opts { display: flex; gap: 8px; }
 .page-opt { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-family: var(--serif); font-size: 18px; font-weight: 600; border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(127,127,127,.35); }
 .page-opt.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+
+/* ---------- audio Bible ---------- */
+.listen-cta { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 10px; height: 46px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--text); font: inherit; font-weight: 700; font-size: 15px; }
+.listen-cta svg, .aplayer svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.listen-btn.on { color: var(--flame-hi); }
+.scripture span.v.speaking { background: color-mix(in srgb, var(--flame) 24%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--flame) 24%, transparent); }
+.aplayer { position: fixed; left: 10px; right: 10px; bottom: calc(10px + var(--safe-bottom)); z-index: 39; max-width: 560px; margin: 0 auto;
+  display: flex; align-items: center; gap: 4px; padding: 8px 8px 8px 16px; border-radius: 22px; color: var(--text);
+  background: color-mix(in srgb, var(--read-bg) 82%, rgba(127,127,127,.25)); border: 1px solid var(--line);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 14px 40px -12px rgba(0,0,0,.45); animation: pop .25s ease; }
+.aplayer .ap-info { flex: 1; min-width: 0; }
+.aplayer .ap-info b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aplayer .ap-info span { font-size: 12px; color: var(--muted); }
+.aplayer .icon-btn { width: 38px; height: 38px; }
+.ap-play { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); border: 0; flex-shrink: 0; }
+.ap-play svg { fill: currentColor; stroke: none; }
+.ap-play[aria-label="Pause"] svg { fill: none; stroke: currentColor; stroke-width: 3; }
+.ap-rate { min-width: 42px; height: 32px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 700; }
+body.has-player .reader-foot { padding-bottom: 90px; }
+body:has(#vbar) .aplayer { display: none; }
+:root[data-page] .aplayer { color: var(--text); }
+.rhema-bell.on { color: var(--flame-hi); }
+.rhema-bell.on svg { fill: currentColor; fill-opacity: .25; }

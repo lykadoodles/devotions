@@ -267,6 +267,21 @@ export async function verseText(range, { online = true } = {}) {
   return { text: await localText(range, t), translation: t };
 }
 
+// Verse text without touching the network: a saved NLT/ESV copy if there is
+// one, otherwise a built-in translation. Used for scheduled notifications.
+export async function verseTextSaved(range) {
+  const t = current();
+  if (TRANSLATIONS[t].online && keyFor(t)) {
+    try {
+      const parts = [];
+      for (const ch of chapters(range)) { const h = await cached(t, refFor(ch)); if (!h) throw new Error('not saved'); parts.push(h); }
+      const text = parts.map(htmlToText).join(' ').replace(/\s+/g, ' ').trim();
+      if (text.length > 4) return { text, translation: t };
+    } catch {}
+  }
+  return verseText(range, { online: false });
+}
+
 export async function verseTextOnline(range) {
   const t = current();
   const parts = await withTimeout(Promise.all(chapters(range).map((ch) => fetchOnline(t, ch))), 12000);

@@ -4,7 +4,7 @@ import {
   BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES, chapters,
 } from './plan.js';
 import { state, load, save, reset, isDone, setDone, streak, longestStreak, isLit, LIT, setLitHook } from './store.js';
-import { passage, prefetch, savedCount, testKey, hasBuiltInKey, verseText, verseTextOnline, wantsOnline, NOTICES, TRANSLATIONS, TRANSLATION_ORDER, current as currentTranslation } from './text.js';
+import { passage, prefetch, savedCount, testKey, hasBuiltInKey, verseText, verseTextOnline, verseTextSaved, wantsOnline, NOTICES, TRANSLATIONS, TRANSLATION_ORDER, current as currentTranslation } from './text.js';
 import { rhemaRange, dailyIndex, randomIndex } from './rhema.js';
 import { loadDevo, devoFor } from './devo.js';
 import { openingFor, closingPrayer } from './prayers.js';
@@ -12,6 +12,7 @@ import * as music from './music.js';
 import * as PL from './prayerlist.js';
 import * as J from './journal.js';
 import * as Backup from './backup.js';
+import * as Audio from './audio.js';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -42,6 +43,12 @@ const ICON = {
   musicoff: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/><path d="M3 3l18 18"/>',
   pray: '<path d="M12 3c-1.5 2-3 4.5-3 8v6l-3 4h12l-3-4v-6c0-3.5-1.5-6-3-8z"/><path d="M12 3v14"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
+  pause: '<path d="M8 5v14M16 5v14"/>',
+  prev: '<path d="M18 6l-8 6 8 6zM6 6v12"/>',
+  next: '<path d="M6 6l8 6-8 6zM18 6v12"/>',
+  headphones: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15a2 2 0 0 1 2-2h1v7H6a2 2 0 0 1-2-2zM20 15a2 2 0 0 0-2-2h-1v7h1a2 2 0 0 0 2-2z"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>',
   bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/>',
   target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
@@ -420,11 +427,13 @@ function viewToday(date) {
       if (!next) return `<div class="devo-cta done rise"><span>${icon('check')}</span> ${ahead ? `Day ${n}’s devotion is complete` : 'Today’s devotion is complete'}</div>`;
       return `<a class="btn primary block devo-cta rise" href="#/devo${daySuffix(t)}">${icon('play')} ${ahead ? `${started ? 'Continue' : 'Start'} Day ${n}’s devotion` : started ? 'Continue today’s devotion' : 'Start today’s devotion'}</a>`;
     })()}
+    ${Audio.available() ? `<button class="listen-cta rise" data-action="listen-today" data-date="${t}">${icon('headphones')} Listen to ${ahead ? `Day ${n}’s` : 'today’s'} reading</button>` : ''}
 
     ${ahead ? '' : `<section class="rhema rise" id="rhema" style="animation-delay:.15s">
       <div class="rhema-head">
         <span class="eyebrow">${SPARKLE('', 'position:static;width:14px;height:14px;display:inline-block;vertical-align:-2px;margin-right:6px')}Rhema for today</span>
         <div class="rhema-actions">
+          <button class="icon-btn rhema-bell ${state.rhemaNotif?.on ? 'on' : ''}" data-action="rhema-notif" aria-label="${state.rhemaNotif?.on ? 'Verse of the day reminder is on' : 'Remind me with a verse every day'}">${icon('bell')}</button>
           <button class="icon-btn" data-action="rhema-new" aria-label="Show another verse">${icon('shuffle')}</button>
           <button class="icon-btn" data-action="rhema-share" aria-label="Share this verse">${icon('share')}</button>
         </div>
@@ -591,6 +600,7 @@ async function viewReader(track, key) {
         <button class="icon-btn" data-action="back" aria-label="Back">${icon('back')}</button>
         <div class="reader-title"><div class="track">${t.name}</div><div class="ref">${esc(ref)}</div></div>
         <button class="tr-chip" data-action="reading-sheet" aria-label="Translation and text options">${currentTranslation()}<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+        <button class="icon-btn listen-btn" data-action="listen" aria-label="Listen to this passage">${icon('headphones')}</button>
         ${musicBtn()}
         <button class="icon-btn" data-action="reading-sheet" aria-label="Text options"><span style="font-family:var(--serif);font-size:19px;font-weight:600">Aa</span></button>
       </div>
@@ -627,6 +637,8 @@ async function viewReader(track, key) {
   readerTr = res.translation;
   tagVerses(document.querySelector('.scripture'), r.range);
   paintVerses();
+  readerShown = { track, key };
+  afterReaderRender(track, key);
   const prog = document.getElementById('rprog');
   const onScroll = () => {
     const h = document.documentElement.scrollHeight - innerHeight;
@@ -1044,11 +1056,14 @@ function viewSettings() {
     </div>
 
     <div class="section">
-      <div class="section-head"><div class="h2">Daily reminder</div></div>
+      <div class="section-head"><div class="h2">Reminders</div></div>
       <div class="list">
         <div class="item"><div class="t"><b>Remind me to read</b><span>A gentle nudge with the day’s passages</span></div>
           <button class="switch ${state.reminder.on ? 'on' : ''}" data-action="reminder" aria-label="Toggle reminder"></button></div>
         <div class="item"><div class="t"><b>Time</b></div><input type="time" id="rtime" value="${state.reminder.time}"></div>
+        <div class="item"><div class="t"><b>Verse of the day</b><span>A Rhema verse to start your day</span></div>
+          <button class="switch ${state.rhemaNotif?.on ? 'on' : ''}" data-action="rhema-notif" aria-label="Toggle verse of the day"></button></div>
+        <div class="item"><div class="t"><b>Verse time</b></div><input type="time" id="rvtime" value="${state.rhemaNotif?.time || '07:00'}"></div>
       </div>
     </div>
 
@@ -1123,30 +1138,183 @@ async function scheduleReminders() {
   try {
     const pending = await LN.getPending();
     if (pending.notifications?.length) await LN.cancel({ notifications: pending.notifications.map((n) => ({ id: n.id })) });
-    if (!state.reminder.on) return;
-    const [hh, mm] = state.reminder.time.split(':').map(Number);
     const list = [];
-    for (let i = 0; i < 21; i++) {
-      const date = addDays(today(), i);
-      const at = new Date(date.replace(/-/g, '/')); at.setHours(hh, mm, 0, 0);
-      if (at <= new Date()) continue;
-      const rs = readingsFor(state.startDate, date);
-      if (i === 0 && rs.every((r) => isDone(r.track, r.key))) continue;
-      const n = planDayFor(state.startDate, date);
-      list.push({
-        id: 1000 + i,
-        title: n >= 1 && n <= DAYS ? `Day ${n} · your lamp is waiting` : 'Your daily Proverb is waiting',
-        body: rs.map((r) => label(r.range)).join(' · '),
-        schedule: { at, allowWhileIdle: true },
-      });
+    const atTime = (date, time) => { const [hh, mm] = time.split(':').map(Number); const at = new Date(date.replace(/-/g, '/')); at.setHours(hh, mm, 0, 0); return at; };
+    if (state.reminder.on) {
+      for (let i = 0; i < 21; i++) {
+        const date = addDays(today(), i);
+        const at = atTime(date, state.reminder.time);
+        if (at <= new Date()) continue;
+        const rs = readingsFor(state.startDate, date);
+        if (i === 0 && rs.every((r) => isDone(r.track, r.key))) continue;
+        const n = planDayFor(state.startDate, date);
+        list.push({
+          id: 1000 + i,
+          title: n >= 1 && n <= DAYS ? `Day ${n} · your lamp is waiting` : 'Your daily Proverb is waiting',
+          body: rs.map((r) => label(r.range)).join(' · '),
+          schedule: { at, allowWhileIdle: true },
+          extra: { route: '#/today' },
+        });
+      }
+    }
+    if (state.rhemaNotif?.on) {
+      for (let i = 0; i < 14; i++) {
+        const date = addDays(today(), i);
+        const at = atTime(date, state.rhemaNotif.time || '07:00');
+        if (at <= new Date()) continue;
+        const range = rhemaRange(dailyIndex(date));
+        const ref = label(range);
+        let res;
+        try { res = await verseTextSaved(range); } catch { continue; }
+        const text = res.text.replace(/\s+/g, ' ').trim();
+        const short = text.length > 110 ? `${text.slice(0, 107).replace(/\s+\S*$/, '')}…` : text;
+        list.push({
+          id: 2000 + i,
+          title: 'Rhema for today ✨',
+          body: `“${short}” ${ref}`,
+          largeBody: `“${text}”\n${ref} · ${res.translation}`,
+          schedule: { at, allowWhileIdle: true },
+          extra: { route: '#/today', rhema: true },
+        });
+      }
     }
     if (list.length) await LN.schedule({ notifications: list });
   } catch (e) { console.warn('reminders', e); }
 }
 
+async function notifPermission() {
+  const LN = P().LocalNotifications;
+  if (!LN) { toast('Notifications work in the Android app'); return true; }
+  try { const p = await LN.requestPermissions(); if (p.display !== 'granted') { toast('Notifications are blocked in Android settings'); return false; } } catch {}
+  return true;
+}
+
+async function toggleRhemaNotif() {
+  if (!state.rhemaNotif.on && !(await notifPermission())) return;
+  state.rhemaNotif.on = !state.rhemaNotif.on; save(); scheduleReminders(); haptic();
+  toast(state.rhemaNotif.on ? `A verse will arrive every day at ${fmtTime(state.rhemaNotif.time)}` : 'Verse of the day reminder off');
+  document.querySelectorAll('.rhema-bell').forEach((b) => b.classList.toggle('on', state.rhemaNotif.on));
+  if (location.hash.includes('settings')) route();
+}
+const fmtTime = (hm) => { const [h, m] = hm.split(':').map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
+
+// ---------- audio Bible ----------
+let readerShown = null;        // { track, key } currently on screen in the reader
+let autoplayPending = false;   // start reading once the reader has rendered
+let followNav = false;         // the next reader render came from playback moving on
+let musicVolBefore = null;
+const samePortion = (a, b) => a && b && a.track === b.track && String(a.key) === String(b.key);
+const hashPortion = () => { const [, v, a, b] = (location.hash || '').split('/'); return v === 'read' ? { track: a, key: b } : null; };
+
+function duckMusic(on) {
+  if (on && music.isPlaying() && musicVolBefore == null) { musicVolBefore = state.music?.vol ?? .6; music.setVolume(musicVolBefore * .3); }
+  if (!on && musicVolBefore != null) { music.setVolume(musicVolBefore); musicVolBefore = null; }
+}
+
+function paintSpeaking(scroll = true) {
+  document.querySelectorAll('.scripture span.v.speaking').forEach((x) => x.classList.remove('speaking'));
+  const { item, playing } = Audio.snapshot();
+  if (!item?.k || !samePortion(item.portion, readerShown)) return;
+  const spans = document.querySelectorAll(`.scripture span.v[data-k="${item.k}"]`);
+  spans.forEach((x) => x.classList.add('speaking'));
+  if (scroll && playing && spans[0] && !selected.size) {
+    const r = spans[0].getBoundingClientRect();
+    if (r.top < 90 || r.bottom > innerHeight - 200) window.scrollTo({ top: scrollY + r.top - innerHeight * .35, behavior: 'smooth' });
+  }
+}
+
+function renderPlayer() {
+  let bar = document.getElementById('aplayer');
+  const snap = Audio.snapshot();
+  if (!snap.length || !hashPortion()) { bar?.remove(); document.body.classList.remove('has-player'); return; }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'aplayer'; bar.className = 'aplayer'; document.body.appendChild(bar); }
+  document.body.classList.add('has-player');
+  const it = snap.item;
+  const where = it?.k ? J.refOf([it.k]) : it?.portion?.label || '';
+  const parts = [...new Set(snap.queue.map((q) => `${q.portion?.track}|${q.portion?.key}`))];
+  const pi = parts.indexOf(`${it?.portion?.track}|${it?.portion?.key}`);
+  bar.innerHTML = `
+    <div class="ap-info"><b>${esc(where)}</b><span>${snap.playing ? (parts.length > 1 ? `Part ${pi + 1} of ${parts.length}` : 'Reading aloud') : 'Paused'}</span></div>
+    <button class="icon-btn" data-action="ap-prev" aria-label="Previous verse">${icon('prev')}</button>
+    <button class="ap-play" data-action="ap-toggle" aria-label="${snap.playing ? 'Pause' : 'Play'}">${icon(snap.playing ? 'pause' : 'play')}</button>
+    <button class="icon-btn" data-action="ap-next" aria-label="Next verse">${icon('next')}</button>
+    <button class="ap-rate" data-action="ap-rate" aria-label="Reading speed">${Audio.rate()}×</button>
+    <button class="icon-btn" data-action="ap-close" aria-label="Stop listening">${icon('close')}</button>`;
+  document.querySelectorAll('.listen-btn').forEach((b) => b.classList.toggle('on', snap.playing));
+}
+
+Audio.onChange((ev, snap) => {
+  duckMusic(snap.playing);
+  if (ev === 'end') { toast(Audio.snapshot().queue.some((q) => q.portion?.track !== snap.queue[0]?.portion?.track) ? 'That’s the whole reading. Amen 🙏' : 'Finished reading 🙏'); }
+  const it = snap.item;
+  // playback moved into another portion: follow it in the reader
+  if (it?.portion && hashPortion() && !samePortion(it.portion, hashPortion()) && document.visibilityState === 'visible' && (ev === 'next')) {
+    followNav = true;
+    location.hash = `#/read/${it.portion.track}/${it.portion.key}`;
+    return;
+  }
+  paintSpeaking(); renderPlayer();
+});
+
+function afterReaderRender(track, key) {
+  if (!Audio.isActive()) return;
+  const here = { track, key };
+  if (!Audio.snapshot().queue.some((q) => samePortion(q.portion, here))) { Audio.stop(); return; }
+  if (autoplayPending) { autoplayPending = false; const i = Audio.indexOf((q) => samePortion(q.portion, here)); Audio.play(Math.max(0, i)); }
+  followNav = false;
+  paintSpeaking(); renderPlayer();
+}
+
+// Read the passage on screen, starting from the first verse in view
+async function listenHere() {
+  const here = readerShown;
+  const root = document.querySelector('.scripture');
+  if (!here || !root) return;
+  if (Audio.isActive() && Audio.snapshot().queue.some((q) => samePortion(q.portion, here))) { Audio.toggle(); return; }
+  const r = readingFor(here.track, here.key);
+  const portion = { ...here, label: label(r.range), intro: `${TRACKS[here.track].name}.` };
+  const items = Audio.itemsFrom(root, portion);
+  let start = 0;
+  if (scrollY > 150) {
+    const first = [...root.querySelectorAll('span.v')].find((x) => x.getBoundingClientRect().top > 70);
+    if (first) start = Math.max(0, items.findIndex((i) => i.k === first.dataset.k));
+  }
+  Audio.load(items, start); haptic();
+  await Audio.play(start);
+}
+
+// Read all of a day's portions back to back (unread ones, or all if done)
+async function listenDay(date) {
+  const rs = readingsFor(state.startDate, date);
+  const list = rs.some((r) => !isDone(r.track, r.key)) ? rs.filter((r) => !isDone(r.track, r.key)) : rs;
+  if (!list.length) return;
+  toast('Getting the reading ready…');
+  const items = [];
+  for (const r of list) {
+    let res;
+    try { res = await passage(r.range); } catch { continue; }
+    const box = document.createElement('div'); box.innerHTML = res.html;
+    tagVerses(box, r.range);
+    items.push(...Audio.itemsFrom(box, { track: r.track, key: r.key, label: label(r.range), intro: `${TRACKS[r.track].name}.` }));
+  }
+  if (!items.length) { toast('Couldn’t load the reading'); return; }
+  await Audio.stop();
+  Audio.load(items, 0);
+  autoplayPending = true;
+  const first = items[0].portion;
+  const target = `#/read/${first.track}/${first.key}`;
+  if (location.hash === target) { route(); } else location.hash = target;
+}
+
 // ---------- router ----------
 function route() {
   window.onscroll = null;
+  readerShown = null;
+  if (Audio.isActive()) {
+    const hp = hashPortion();
+    if (!hp || !Audio.snapshot().queue.some((q) => samePortion(q.portion, hp))) { Audio.stop(); autoplayPending = false; }
+  }
+  renderPlayer();
   selected.clear(); document.getElementById('vbar')?.remove();
   $app.classList.remove('reader-mode'); applyTheme();
   if (!state.onboarded) return viewWelcome();
@@ -1376,6 +1544,14 @@ document.addEventListener('click', async (e) => {
       }
     }
   }
+  if (a === 'listen') { listenHere(); return; }
+  if (a === 'listen-today') { listenDay(el.dataset.date || today()); return; }
+  if (a === 'ap-toggle') { Audio.toggle(); haptic(); return; }
+  if (a === 'ap-prev') { Audio.skip(-1); return; }
+  if (a === 'ap-next') { Audio.skip(1); return; }
+  if (a === 'ap-rate') { const R = Audio.RATES; Audio.setRate(R[(R.indexOf(Audio.rate()) + 1) % R.length]); toast(`Reading speed ${Audio.rate()}×`); return; }
+  if (a === 'ap-close') { Audio.stop(); return; }
+  if (a === 'rhema-notif') { toggleRhemaNotif(); return; }
   if (a === 'rhema-new') {
     const idx = randomIndex(currentRhemaIndex());
     state.rhema = { date: today(), idx }; save(); haptic();
@@ -1425,9 +1601,7 @@ document.addEventListener('click', async (e) => {
   }
   if (a === 'reminder') {
     const LN = P().LocalNotifications;
-    if (!state.reminder.on && LN) {
-      try { const p = await LN.requestPermissions(); if (p.display !== 'granted') { toast('Notifications are blocked in Android settings'); return; } } catch {}
-    }
+    if (!state.reminder.on && LN && !(await notifPermission())) return;
     state.reminder.on = !state.reminder.on; save(); scheduleReminders();
     if (!LN && state.reminder.on) toast('Reminders work in the Android app');
     route();
@@ -1483,6 +1657,7 @@ document.addEventListener('submit', (e) => {
 document.addEventListener('change', (e) => {
   const id = e.target.id;
   if (id === 'mvol') { state.music ||= { on: false, vol: 0.6 }; state.music.vol = Number(e.target.value) / 100; save(); music.setVolume(state.music.vol); }
+  if (id === 'rvtime') { state.rhemaNotif.time = e.target.value || '07:00'; save(); scheduleReminders(); toast('Verse time saved'); }
   if (id === 'rtime') { state.reminder.time = e.target.value || '06:00'; save(); scheduleReminders(); toast('Reminder time saved'); }
   if (id === 'name') { state.name = e.target.value.trim(); save(); }
   if (id === 'start' && e.target.value) {
@@ -1510,4 +1685,6 @@ document.addEventListener('visibilitychange', () => {
   applyTheme();
   route();
   scheduleReminders();
+  // Tapping a notification opens the right screen
+  try { P().LocalNotifications?.addListener('localNotificationActionPerformed', (e) => { const r = e.notification?.extra?.route; if (r && location.hash !== r) location.hash = r; }); } catch {}
 })();
