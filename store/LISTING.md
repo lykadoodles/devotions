@@ -39,8 +39,14 @@ PRAYER LIST
 • A few requests are added to your closing prayer each day
 • Mark prayers answered and record how God answered
 
+AUDIO BIBLE
+• Listen to any reading read aloud, with each verse highlighted as it's read
+• "Listen to today's reading" plays all of the day's portions back to back, great for commutes
+• Adjust the reading speed, and keep listening with the screen off
+
 RHEMA FOR TODAY
 • A fresh encouraging verse every day
+• Get it as a morning notification, at the time you choose
 • Shuffle for another, or share it with a friend
 
 STAY MOTIVATED
@@ -58,7 +64,8 @@ SEE YOUR PROGRESS
 
 BEAUTIFUL AND PRIVATE
 • Clean reading with adjustable text size and a serif or sans-serif font
-• Dark and light themes
+• Choose your reading page: Blue, Dark, Light or Sepia
+• Back up your progress to a file and restore it on a new phone
 • Works offline: upcoming readings are saved on your phone
 • No account, no ads, no tracking. Your progress stays on your phone.
 
@@ -97,7 +104,7 @@ FIVE TRANSLATIONS
 
 ## Permissions (for any declarations Play asks about)
 - INTERNET: load NLT/ESV passages
-- POST_NOTIFICATIONS: optional daily reading reminder
+- POST_NOTIFICATIONS: optional daily reading reminder and verse of the day
 - RECEIVE_BOOT_COMPLETED: restore the reminder after restart
 - VIBRATE: haptic feedback when finishing a reading
 - No exact alarm permission is requested.
