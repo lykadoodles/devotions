@@ -44,7 +44,7 @@ AUDIO BIBLE
 • "Listen to today's reading" plays all of the day's portions back to back, great for commutes
 • Adjust the reading speed, and keep listening with the screen off
 
-RHEMA FOR TODAY
+VERSE OF THE DAY
 • A fresh encouraging verse every day
 • Get it as a morning notification, at the time you choose
 • Shuffle for another, or share it with a friend

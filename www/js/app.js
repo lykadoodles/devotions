@@ -431,7 +431,7 @@ function viewToday(date) {
 
     ${ahead ? '' : `<section class="rhema rise" id="rhema" style="animation-delay:.15s">
       <div class="rhema-head">
-        <span class="eyebrow">${SPARKLE('', 'position:static;width:14px;height:14px;display:inline-block;vertical-align:-2px;margin-right:6px')}Rhema for today</span>
+        <span class="eyebrow">${SPARKLE('', 'position:static;width:14px;height:14px;display:inline-block;vertical-align:-2px;margin-right:6px')}Verse of the day</span>
         <div class="rhema-actions">
           <button class="icon-btn rhema-bell ${state.rhemaNotif?.on ? 'on' : ''}" data-action="rhema-notif" aria-label="${state.rhemaNotif?.on ? 'Verse of the day reminder is on' : 'Remind me with a verse every day'}">${icon('bell')}</button>
           <button class="icon-btn" data-action="rhema-new" aria-label="Show another verse">${icon('shuffle')}</button>
@@ -1061,7 +1061,7 @@ function viewSettings() {
         <div class="item"><div class="t"><b>Remind me to read</b><span>A gentle nudge with the day’s passages</span></div>
           <button class="switch ${state.reminder.on ? 'on' : ''}" data-action="reminder" aria-label="Toggle reminder"></button></div>
         <div class="item"><div class="t"><b>Time</b></div><input type="time" id="rtime" value="${state.reminder.time}"></div>
-        <div class="item"><div class="t"><b>Verse of the day</b><span>A Rhema verse to start your day</span></div>
+        <div class="item"><div class="t"><b>Verse of the day</b><span>A verse to start your day</span></div>
           <button class="switch ${state.rhemaNotif?.on ? 'on' : ''}" data-action="rhema-notif" aria-label="Toggle verse of the day"></button></div>
         <div class="item"><div class="t"><b>Verse time</b></div><input type="time" id="rvtime" value="${state.rhemaNotif?.time || '07:00'}"></div>
       </div>
@@ -1170,7 +1170,7 @@ async function scheduleReminders() {
         const short = text.length > 110 ? `${text.slice(0, 107).replace(/\s+\S*$/, '')}…` : text;
         list.push({
           id: 2000 + i,
-          title: 'Rhema for today ✨',
+          title: 'Verse of the day ✨',
           body: `“${short}” ${ref}`,
           largeBody: `“${text}”\n${ref} · ${res.translation}`,
           schedule: { at, allowWhileIdle: true },
