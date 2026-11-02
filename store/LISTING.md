@@ -14,7 +14,7 @@ Your word is a lamp to my feet, and a light for my path. (Psalm 119:105)
 Lamp is a complete daily devotion that takes you through the whole Bible in one year, about 15 minutes a day.
 
 A GUIDED DAILY DEVOTION
-• Begin with prayer: a guided opening prayer asking God for wisdom and to lead you into all truth, with a moment of silence
+• Begin with prayer: a guided opening prayer asking God for wisdom and to lead you into all truth, with time to pray fervently in your own words
 • Four short readings: Old Testament, New Testament, Psalms and Proverbs
 • After each reading: a key takeaway and one simple way to apply it today
 • End with prayer: a closing prayer built from the day's readings

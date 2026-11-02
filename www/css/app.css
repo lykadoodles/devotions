@@ -473,7 +473,12 @@ body { background: var(--page-bg); background-attachment: fixed; }
 .prayer-lines { flex: 1; padding: 10px 0 20px; }
 .pl { font-family: var(--serif); font-size: 21px; line-height: 1.55; margin: 0 0 18px; color: var(--muted); opacity: .55; transition: opacity .5s, color .5s; }
 .pl.current { color: var(--text); opacity: 1; animation: rise .6s cubic-bezier(.2,.8,.2,1); }
-.pl.silence { display: flex; align-items: center; gap: 14px; font-family: var(--sans); font-size: 15px; font-style: normal; }
+.pl.fervent { display: flex; align-items: center; gap: 14px; font-family: var(--sans); font-size: 16px; font-style: normal; padding: 14px 16px; border-radius: 18px; border: 1px solid color-mix(in srgb, var(--flame) 35%, transparent); background: color-mix(in srgb, var(--flame) 8%, transparent); }
+.pl.fervent small { display: block; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--flame-hi); margin-bottom: 3px; }
+.fv-flame { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; color: #fff; background: radial-gradient(circle at 50% 60%, #ffb347, #f4892f 55%, #d9480f); box-shadow: 0 0 18px rgba(255, 150, 60, .55); }
+.fv-flame svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; }
+.pl.fervent.current .fv-flame { animation: fervent 1.6s ease-in-out infinite; }
+@keyframes fervent { 0%,100% { transform: scale(1); box-shadow: 0 0 14px rgba(255, 150, 60, .45); } 50% { transform: scale(1.1); box-shadow: 0 0 26px rgba(255, 170, 70, .85); } }
 .breath { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; background: radial-gradient(circle, rgba(255, 190, 110, .9), rgba(255, 150, 60, .15) 70%);
   animation: breathe 8s ease-in-out infinite; }
 @keyframes breathe { 0%,100% { transform: scale(.65); opacity: .6; } 45% { transform: scale(1.15); opacity: 1; } 55% { transform: scale(1.15); opacity: 1; } }

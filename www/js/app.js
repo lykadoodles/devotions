@@ -920,12 +920,12 @@ async function viewPrayer(which, t = today()) {
             ? `<p class="pl ${k === i ? 'current' : ''}">${esc(l)}</p>`
             : l.request
               ? `<div class="pl request ${k === i ? 'current' : ''}"><span class="req-icon">${icon('pray')}</span><div><b>${esc(l.request)}</b>${l.who ? `<small>for ${esc(l.who)}</small>` : ''}</div></div>`
-              : `<div class="pl silence ${k === i ? 'current' : ''}"><div class="breath"></div><span>${esc(l.silence)}</span></div>`).join('')}
+              : `<div class="pl fervent ${k === i ? 'current' : ''}"><div class="fv-flame">${icon('flame')}</div><div><small>Your prayer${l.ref ? ` · ${esc(l.ref)}` : ''}</small><span>${esc(l.pray)}</span></div></div>`).join('')}
         </div>
         <div class="prayer-foot">
           ${done
             ? `<button class="btn primary block" data-action="amen" data-which="${which}" data-date="${t}" data-req="${viewPrayer.requests.map((r) => r.id).join(',')}">Amen</button>`
-            : `<button class="btn primary block" data-action="pray-next">${lines[i]?.silence ? 'Continue' : 'Next'}</button>`}
+            : `<button class="btn primary block" data-action="pray-next">${lines[i]?.pray ? 'Amen, continue' : 'Next'}</button>`}
           <div class="prayer-dots">${lines.map((_, k) => `<i class="${k <= i ? 'on' : ''}"></i>`).join('')}</div>
         </div>
       </div>`;
@@ -955,10 +955,10 @@ async function prayVoicePlay() {
   while (tok === prayVoice.token) {
     const { line, last } = viewPrayer.current?.() || {};
     if (!line) break;
-    const text = typeof line === 'string' ? line : line.request ? (line.who ? `For ${line.who}. ${line.request}` : line.request) : line.silence;
+    const text = typeof line === 'string' ? line : line.request ? (line.who ? `For ${line.who}. ${line.request}` : line.request) : line.pray;
     try { await Audio.speakOnce(text); } catch {}
     if (tok !== prayVoice.token) return;
-    await sleep(line.silence ? 12000 : 900);   // a real moment of silence, or a short breath between lines
+    await sleep(line.pray ? 20000 : 900);   // time for the reader's own fervent prayer, or a short pause between lines
     if (tok !== prayVoice.token) return;
     if (last) { prayVoice.on = false; duckMusic(false); syncPrayBtn(); return; }
     viewPrayer.next();
