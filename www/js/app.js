@@ -908,6 +908,7 @@ async function viewPrayer(which, t = today()) {
         <div class="row">
           <button class="icon-btn" data-action="back" aria-label="Back">${icon('back')}</button>
           <div class="reader-title"><div class="track" style="color:var(--muted)">${which === 'open' ? 'Opening prayer' : 'Closing prayer'}</div><div class="ref">${esc(prayer.theme)}</div></div>
+          ${Audio.available() ? `<button class="icon-btn listen-btn pray-voice ${prayVoice.on ? 'on' : ''}" data-action="pray-listen" aria-label="${prayVoice.on ? 'Stop reading the prayer aloud' : 'Read the prayer aloud'}">${icon('headphones')}</button>` : ''}
           ${musicBtn()}
         </div>
       </div>
@@ -932,7 +933,36 @@ async function viewPrayer(which, t = today()) {
     cur?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
   viewPrayer.next = () => { if (i < lines.length - 1) { i++; haptic(); render(); } };
+  viewPrayer.current = () => ({ line: lines[i], last: i >= lines.length - 1 });
   render();
+  if (state.prayAudio && Audio.available()) prayVoicePlay();
+}
+
+// ---------- guided prayer, read aloud ----------
+const prayVoice = { token: 0, on: false };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const syncPrayBtn = () => document.querySelectorAll('.pray-voice').forEach((b) => b.classList.toggle('on', prayVoice.on));
+function prayVoiceStop() {
+  if (!prayVoice.on) return;
+  prayVoice.token++; prayVoice.on = false;
+  Audio.hushNow(); duckMusic(false); syncPrayBtn();
+}
+async function prayVoicePlay() {
+  const tok = ++prayVoice.token;
+  prayVoice.on = true; syncPrayBtn();
+  if (Audio.isActive()) await Audio.stop();
+  duckMusic(true);
+  while (tok === prayVoice.token) {
+    const { line, last } = viewPrayer.current?.() || {};
+    if (!line) break;
+    const text = typeof line === 'string' ? line : line.request ? (line.who ? `For ${line.who}. ${line.request}` : line.request) : line.silence;
+    try { await Audio.speakOnce(text); } catch {}
+    if (tok !== prayVoice.token) return;
+    await sleep(line.silence ? 12000 : 900);   // a real moment of silence, or a short breath between lines
+    if (tok !== prayVoice.token) return;
+    if (last) { prayVoice.on = false; duckMusic(false); syncPrayBtn(); return; }
+    viewPrayer.next();
+  }
 }
 
 function nextUnreadToday() {
@@ -1355,6 +1385,7 @@ function route() {
 }
 function routeView(same) {
   window.onscroll = null;
+  prayVoiceStop();
   readerShown = null;
   if (Audio.isActive()) {
     const hp = hashPortion();
@@ -1568,7 +1599,12 @@ document.addEventListener('click', async (e) => {
     if (el.dataset.confirm) { PL.remove(el.dataset.id); viewPrayerList.closeSheet?.(); viewPrayerList(); toast('Request deleted'); }
     else { el.dataset.confirm = '1'; el.textContent = 'Tap again to delete'; }
   }
-  if (a === 'pray-next') viewPrayer.next?.();
+  if (a === 'pray-next') { viewPrayer.next?.(); if (prayVoice.on) prayVoicePlay(); }
+  if (a === 'pray-listen') {
+    if (prayVoice.on) { prayVoiceStop(); state.prayAudio = false; save(); toast('Prayer read-aloud off'); }
+    else { state.prayAudio = true; save(); haptic(); toast('Lamp will read prayers aloud. Tap 🎧 to stop.'); prayVoicePlay(); }
+    return;
+  }
   if (a === 'music-pref') {
     state.music ||= { on: false, vol: 0.6 };
     state.music.on = !state.music.on; save();

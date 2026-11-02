@@ -22,6 +22,7 @@ const DEFAULTS = () => ({
   reminder: { on: false, time: '06:00' },
   rhemaNotif: { on: false, time: '07:00' },
   audioRate: 1,
+  prayAudio: false,
   // done[track][key] = date it was marked read
   done: { ot: {}, nt: {}, ps: {}, pr: {} },
   // log[date] = number of portions marked read that day
@@ -68,7 +69,7 @@ export function save() {
 export function reset(keepSettings = true) {
   const keep = keepSettings
     ? { name: state.name, translation: state.translation, nltKey: state.nltKey, esvKey: state.esvKey, theme: state.theme,
-        fontScale: state.fontScale, readFont: state.readFont, readPage: state.readPage, music: state.music, reminder: state.reminder, rhemaNotif: state.rhemaNotif, audioRate: state.audioRate, onboarded: state.onboarded }
+        fontScale: state.fontScale, readFont: state.readFont, readPage: state.readPage, music: state.music, reminder: state.reminder, rhemaNotif: state.rhemaNotif, audioRate: state.audioRate, prayAudio: state.prayAudio, onboarded: state.onboarded }
     : {};
   Object.assign(state, DEFAULTS(), keep);
   save();

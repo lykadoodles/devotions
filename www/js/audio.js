@@ -38,6 +38,15 @@ async function hush() {
   try { const n = native(); if (n) await n.stop(); else web()?.cancel(); } catch {}
 }
 
+// One-off phrase (guided prayers), in English, replacing anything being read
+export async function speakOnce(text, l = 'en-US') {
+  const n = native();
+  if (n) return n.speak({ text, lang: l, rate: rate(), pitch: 1, volume: 1, category: 'playback', queueStrategy: 0 });
+  web()?.cancel();
+  return new Promise((resolve) => { const u = new SpeechSynthesisUtterance(text); u.lang = l; u.rate = rate(); u.onend = u.onerror = () => resolve(); web().speak(u); });
+}
+export const hushNow = () => hush();
+
 export function load(items, start = 0) { queue = items.filter((i) => i.text && i.text.trim()); idx = Math.max(0, Math.min(start, queue.length - 1)); }
 
 export async function play(from = idx) {
