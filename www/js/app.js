@@ -4,7 +4,7 @@ import {
   BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES, chapters,
 } from './plan.js';
 import { state, load, save, reset, isDone, setDone, streak, longestStreak, isLit, LIT, setLitHook } from './store.js';
-import { passage, prefetch, savedCount, testKey, hasBuiltInKey, hasKey, verseText, verseTextOnline, verseTextSaved, wantsOnline, NOTICES, TRANSLATIONS, TRANSLATION_ORDER, current as currentTranslation } from './text.js';
+import { passage, prefetch, savedCount, testKey, hasBuiltInKey, hasKey, verseText, verseTextOnline, verseTextSaved, wantsOnline, TRACK_SPOKEN, NOTICES, TRANSLATIONS, TRANSLATION_ORDER, current as currentTranslation } from './text.js';
 import { rhemaRange, dailyIndex, randomIndex } from './rhema.js';
 import { loadDevo, devoFor } from './devo.js';
 import { openingFor, closingPrayer } from './prayers.js';
@@ -1426,7 +1426,7 @@ async function listenHere() {
   if (!here || !root) return;
   if (Audio.isActive() && Audio.snapshot().queue.some((q) => samePortion(q.portion, here))) { Audio.toggle(); return; }
   const r = readingFor(here.track, here.key);
-  const portion = { ...here, label: label(r.range), intro: `${TRACKS[here.track].name}.` };
+  const portion = { ...here, label: label(r.range), intro: `${TRACK_SPOKEN[readerTr]?.[here.track] || TRACKS[here.track].name}.` };
   const items = Audio.itemsFrom(root, portion);
   let start = 0;
   if (scrollY > 150) {
@@ -1449,7 +1449,7 @@ async function listenDay(date) {
     try { res = await passage(r.range); } catch { continue; }
     const box = document.createElement('div'); box.innerHTML = res.html;
     tagVerses(box, r.range);
-    items.push(...Audio.itemsFrom(box, { track: r.track, key: r.key, label: label(r.range), intro: `${TRACKS[r.track].name}.` }));
+    items.push(...Audio.itemsFrom(box, { track: r.track, key: r.key, label: label(r.range), intro: `${TRACK_SPOKEN[res.translation]?.[r.track] || TRACKS[r.track].name}.` }));
   }
   if (!items.length) { toast('Couldn’t load the reading'); return; }
   await Audio.stop();

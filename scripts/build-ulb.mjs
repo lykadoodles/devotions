@@ -58,6 +58,15 @@ for (const [code, dir] of [['TGL', 'fil'], ['CEB', 'ceb']]) {
       }),
     };
   });
+  // Book names in the translation's own language (from each book's \h header)
+  const tidy = (n) => (n === n.toUpperCase() ? n.toLowerCase().replace(/(^|\s)(\p{L})/gu, (m, a, b) => a + b.toUpperCase()) : n);
+  const names = files.map((f) => tidy((fs.readFileSync(path.join(SRC, dir, 'USFM', f), 'utf8').replace(/\0/g, '').match(/^\\h\s+(.+)$/m)?.[1] || '').trim()));
+  // small consistency fixes to the source headers
+  const FIX = { TGL: { 'Mga taga-Efeso': 'Mga Taga-Efeso', '1 Corinto': '1 Mga Taga-Corinto', '1 Tesalonica': '1 Mga Taga-Tesalonica' },
+    CEB: { '1 Mga Taga Tesalonica': '1 Tesalonica', '2 Mga Taga-Tesalonica': '2 Tesalonica', 'Taga Efeso': 'Efeso' } }[code];
+  names.forEach((n, i) => { if (FIX[n]) names[i] = FIX[n]; });
+  fs.mkdirSync(`www/data/${code.toLowerCase()}`, { recursive: true });
+  fs.writeFileSync(`www/data/${code.toLowerCase()}/names.json`, JSON.stringify(names));
   fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(path.join(OUT, `${code}.json`), JSON.stringify({ translation: code, books }));
   console.log(code, 'verses', total - missing, '/', total, '| missing:', gaps.slice(0, 30).join(', '));

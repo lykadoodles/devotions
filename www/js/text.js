@@ -50,8 +50,25 @@ const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>'
 const withTimeout = (promise, ms, msg = 'timed out') =>
   Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
 
-function chapterTitle(ch, multi) {
-  return `<h2 class="ch-title">${esc(bookName(ch.b, true))} ${META.books[ch.b].verses.length > 1 ? ch.c : ''}${
+// Book names in the translation's own language (Tagalog / Cebuano)
+const nameCache = {};
+const ONE_PSALM = { TGL: 'Awit', CEB: 'Salmo' };
+async function localNames(code) {
+  if (!ONE_PSALM[code]) return null;
+  return (nameCache[code] ||= fetch(`data/${code.toLowerCase()}/names.json`).then((r) => r.json()).catch(() => null));
+}
+function titleName(b, names, code) {
+  if (!names) return bookName(b, true);
+  return META.books[b].id === 'psalms' ? ONE_PSALM[code] : names[b] || bookName(b, true);
+}
+// Spoken heading for a reading in the translation's language
+export const TRACK_SPOKEN = {
+  TGL: { ot: 'Lumang Tipan', nt: 'Bagong Tipan', ps: 'Mga Awit', pr: 'Mga Kawikaan' },
+  CEB: { ot: 'Daang Kasabotan', nt: 'Bag-ong Kasabotan', ps: 'Mga Salmo', pr: 'Panultihon' },
+};
+
+function chapterTitle(ch, multi, names = null, code = '') {
+  return `<h2 class="ch-title">${esc(titleName(ch.b, names, code))} ${META.books[ch.b].verses.length > 1 ? ch.c : ''}${
     ch.full || !multi ? '' : ` <span class="ch-range">: ${ch.v1}–${ch.v2}</span>`}</h2>`;
 }
 
@@ -66,11 +83,12 @@ function localBook(code, b) {
 
 async function renderLocal(range, code) {
   const chs = chapters(range);
+  const names = await localNames(code);
   let html = '';
   for (const ch of chs) {
     const book = await localBook(code, ch.b);
     const segs = book[ch.c - 1] || [];
-    html += chapterTitle(ch, chs.length > 1);
+    html += chapterTitle(ch, chs.length > 1, names, code);
     let open = null; // 'p' | 'poem'
     const close = () => { if (open === 'p') html += '</p>'; if (open === 'poem') html += '</div>'; open = null; };
     let cur = 0; // verse the current segment belongs to (v=0 continues the previous verse)
