@@ -599,10 +599,10 @@ async function viewReader(track, key) {
     <div class="reader-top t-${track}">
       <div class="row">
         <button class="icon-btn" data-action="back" aria-label="Back">${icon('back')}</button>
-        <div class="reader-title"><div class="track">${t.name}</div><div class="ref">${esc(ref)}</div></div>
-        <button class="tr-chip" data-action="reading-sheet" aria-label="Translation and text options">${shown || currentTranslation()}<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
-        <button class="icon-btn listen-btn" data-action="listen" aria-label="Listen to this passage">${icon('headphones')}</button>
-        ${musicBtn()}
+        <button class="reader-title as-btn" data-action="reading-sheet" aria-label="Change translation and reading options">
+          <div class="track">${t.name}</div>
+          <div class="ref">${esc(ref)}<span class="ref-tr"> · <span class="tr-name">${shown || currentTranslation()}</span><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></div>
+        </button>
         <button class="icon-btn" data-action="reading-sheet" aria-label="Text options"><span style="font-family:var(--serif);font-size:19px;font-weight:600">Aa</span></button>
       </div>
       <div class="progress" id="rprog"></div>
@@ -632,15 +632,35 @@ async function viewReader(track, key) {
       <button class="btn primary block mark-btn ${done ? 'done' : ''}" data-mark="${track}|${key}">
         ${done ? `${icon('check').replace('<svg', '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="3"')} Read` : 'Mark as read'}
       </button>
-      <p class="help" style="text-align:center">${esc(contextLine)} · <button class="link-btn" data-action="reading-sheet">${res.translation || ''} · change</button></p>
+      <p class="help" style="text-align:center">${esc(contextLine)} · <button class="link-btn" data-action="reading-sheet"><span class="tr-name">${res.translation || ''}</span> · change</button></p>
       <p class="copyright">${NOTICES[res.translation] || ''}</p>
-    </div>`;
+    </div>
+    ${Audio.available() ? `<button class="listen-fab" data-action="listen" aria-label="Listen to this passage">${icon('headphones')}<span>Listen</span></button>` : ''}`;
   window.scrollTo(0, 0);
   readerTr = res.translation;
   tagVerses(document.querySelector('.scripture'), r.range);
   paintVerses();
   readerShown = { track, key };
   afterReaderRender(track, key);
+  // NLT/ESV server was slow: keep trying quietly and swap the text in when it arrives
+  if (res.fellBack) (async () => {
+    const here = () => location.hash.startsWith(`#/read/${track}/${key}`);
+    for (const wait of [6000, 20000, 45000]) {
+      await sleep(wait);
+      if (!here()) return;
+      let up; try { up = await passage(r.range, { patient: true }); } catch { continue; }
+      if (up.fellBack || !here()) continue;
+      if (Audio.isActive() && Audio.snapshot().playing) return; // don't swap the text mid-listen
+      const art = document.querySelector('.scripture'); if (!art) return;
+      art.innerHTML = up.html; tagVerses(art, r.range); paintVerses();
+      $app.querySelector(':scope > .note')?.remove();
+      shown = up.translation; readerTr = up.translation;
+      document.querySelectorAll('.tr-name').forEach((x) => { x.textContent = up.translation; });
+      const cp = $app.querySelector('.copyright'); if (cp) cp.textContent = NOTICES[up.translation] || '';
+      toast(`Now showing the ${up.translation}`);
+      return;
+    }
+  })();
   const prog = document.getElementById('rprog');
   const onScroll = () => {
     const h = document.documentElement.scrollHeight - innerHeight;
@@ -858,6 +878,8 @@ function openReadingSheet() {
         <div class="seg-ctl"><button data-sz="-">A−</button><button disabled style="min-width:58px">${Math.round(state.fontScale * 100)}%</button><button data-sz="+">A+</button></div></div>
       <div class="sheet-row"><span class="eyebrow">Font</span>
         <div class="seg-ctl"><button class="${state.readFont !== 'sans' ? 'on' : ''}" data-rf="serif" style="font-family:var(--serif)">Serif</button><button class="${state.readFont === 'sans' ? 'on' : ''}" data-rf="sans">Sans</button></div></div>
+      <div class="sheet-row"><span class="eyebrow">Soft piano</span>
+        <button class="switch ${music.isPlaying() ? 'on' : ''}" data-action="music" aria-label="Soft piano"></button></div>
       <div class="sheet-row"><span class="eyebrow">Page</span>
         <div class="page-opts">${Object.entries(PAGES).map(([k, p]) => `<button class="page-opt ${readPage() === k ? 'on' : ''}" data-pg="${k}" style="background:${p.bg};color:${p.fg}" aria-label="${p.name} page" title="${p.name}">Aa</button>`).join('')}</div></div>
       <button class="btn primary block" data-done style="margin-top:14px">Done</button>
@@ -869,6 +891,7 @@ function openReadingSheet() {
   const close = () => { o.remove(); if (changedTr) route(); };
   o.addEventListener('click', (e) => {
     if (e.target === o || e.target.closest('[data-done]')) return close();
+    if (e.target.closest('[data-action=music]')) { setTimeout(render, 120); return; }
     const tr = e.target.closest('[data-tr]');
     if (tr) {
       if (!hasKey(tr.dataset.tr)) { toast(`The ${tr.dataset.tr} needs a free API key. Add one in Settings → ${tr.dataset.tr} API key.`); return; }

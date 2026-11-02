@@ -209,11 +209,18 @@ const refFor = (ch) => {
   return ch.full ? `${name} ${ch.c}` : `${name} ${ch.c}:${ch.v1}-${ch.v2}`;
 };
 
-async function requestNLT(ref, key) {
+async function requestNLT(ref, key, patient = true) {
   const url = `https://api.nlt.to/api/passages?ref=${encodeURIComponent(ref)}&version=NLT&key=${encodeURIComponent(key)}`;
-  const res = await withTimeout(fetch(url), 10000, 'the NLT server took too long');
-  if (!res.ok) throw new Error(res.status === 401 || res.status === 403 ? 'your NLT key was rejected' : `NLT server error ${res.status}`);
-  return cleanHTML(await res.text(), 'NLT');
+  // The NLT server is sometimes slow: wait longer, and retry once on a timeout or server hiccup
+  for (let attempt = 0; ; attempt++) {
+    let res;
+    try { res = await withTimeout(fetch(url), attempt ? 25000 : 12000, 'the NLT server took too long'); }
+    catch (e) { if (attempt === 0 && patient) continue; throw e; }
+    if (res.ok) return cleanHTML(await res.text(), 'NLT');
+    if (res.status === 401 || res.status === 403) throw new Error('your NLT key was rejected');
+    if (attempt === 0 && patient && (res.status >= 500 || res.status === 429)) continue;
+    throw new Error(`NLT server error ${res.status}`);
+  }
 }
 
 async function requestESV(ref, key) {
@@ -228,13 +235,13 @@ async function requestESV(ref, key) {
   return cleanHTML((data.passages || []).join(''), 'ESV');
 }
 
-async function fetchOnline(t, ch) {
+async function fetchOnline(t, ch, patient = true) {
   const ref = refFor(ch);
   const hit = await cached(t, ref);
   if (hit) return hit;
   const key = keyFor(t);
   if (!key) throw new Error(`no ${t} key`);
-  const html = t === 'ESV' ? await requestESV(ref, key) : await requestNLT(ref, key);
+  const html = t === 'ESV' ? await requestESV(ref, key) : await requestNLT(ref, key, patient);
   await store(t, ref, html, ch.v2 - ch.v1 + 1);
   return html;
 }
@@ -247,7 +254,8 @@ const htmlToText = (h) => {
 
 // ---------- public API ----------
 // Returns { html, translation, note }
-export async function passage(range) {
+// quick: one short try, so the reader isn't left waiting (the reader retries patiently in the background)
+export async function passage(range, { patient = false } = {}) {
   const t = current();
   if (!TRANSLATIONS[t].online) return { html: await renderLocal(range, t), translation: t };
   if (!keyFor(t)) {
@@ -256,11 +264,11 @@ export async function passage(range) {
   }
   try {
     const chs = chapters(range);
-    const parts = await Promise.all(chs.map((ch) => fetchOnline(t, ch)));
+    const parts = await Promise.all(chs.map((ch) => fetchOnline(t, ch, patient)));
     return { html: parts.map((p, i) => `<section class="api-text">${chapterTitle(chs[i], chs.length > 1)}${p}</section>`).join(''), translation: t };
   } catch (e) {
-    return { html: await renderLocal(range, FALLBACK), translation: FALLBACK,
-      note: `Couldn't load the ${t} (${e.message || 'offline'}). Showing the Berean Standard Bible instead.` };
+    return { html: await renderLocal(range, FALLBACK), translation: FALLBACK, fellBack: true,
+      note: `The ${t} is taking a while (${e.message || 'offline'}). Showing the Berean Standard Bible for now; it will switch to the ${t} when it arrives.` };
   }
 }
 
@@ -290,7 +298,7 @@ export async function verseTextSaved(range) {
 
 export async function verseTextOnline(range) {
   const t = current();
-  const parts = await withTimeout(Promise.all(chapters(range).map((ch) => fetchOnline(t, ch))), 12000);
+  const parts = await withTimeout(Promise.all(chapters(range).map((ch) => fetchOnline(t, ch))), 35000);
   const text = parts.map(htmlToText).join(' ').replace(/\s+/g, ' ').trim();
   if (text.length < 5) throw new Error('empty');
   return { text, translation: t };
