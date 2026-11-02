@@ -24,12 +24,56 @@ export const snapshot = () => ({ playing, idx, item: queue[idx] || null, length:
 export const isActive = () => queue.length > 0;
 export const rate = () => (RATES.includes(state.audioRate) ? state.audioRate : 1);
 
-function speak(text, g) {
+// ---------- voices ----------
+// Phones ship several voices (male and female, different accents). The reader
+// picks one per language in Settings or the Aa sheet; we remember its name and
+// look up its current position in the phone's list when speaking.
+let voiceCache = null;
+export async function voices() {
+  if (voiceCache) return voiceCache;
+  try {
+    const n = native();
+    if (n) voiceCache = ((await n.getSupportedVoices()).voices || []).map((v, i) => ({ ...v, index: i }));
+    else if (web()) {
+      let v = web().getVoices();
+      if (!v.length) { await new Promise((r) => { web().onvoiceschanged = r; setTimeout(r, 1500); }); v = web().getVoices(); }
+      voiceCache = v.map((x, i) => ({ name: x.name, lang: x.lang, voiceURI: x.voiceURI, localService: x.localService, index: i, _w: x }));
+    } else voiceCache = [];
+  } catch { voiceCache = []; }
+  return voiceCache;
+}
+export const langKey = (l) => (/^(fil|tl)/i.test(l) ? 'fil' : 'en');
+export const voicesFor = async (key) => (await voices()).filter((v) => (key === 'fil' ? /^(fil|tl)/i : /^en/i).test(v.lang || ''));
+async function chosenVoice(l) {
+  const want = state.voices?.[langKey(l)];
+  if (!want) return null;
+  return (await voices()).find((v) => v.voiceURI === want || v.name === want) || null;
+}
+export function setVoice(key, v) { state.voices = { ...(state.voices || {}), [key]: v ? (v.voiceURI || v.name) : '' }; save(); }
+
+function speakWith(text, l, v, queueStrategy) {
   const n = native();
-  if (n) return n.speak({ text, lang: lang(), rate: rate(), pitch: 1, volume: 1, category: 'playback', queueStrategy: 1 });
+  if (n) return n.speak({ text, lang: l, rate: rate(), pitch: 1, volume: 1, category: 'playback', queueStrategy, ...(v ? { voice: v.index } : {}) });
+  return null;
+}
+
+// Plays a short sample in a voice (Settings / voice picker)
+export async function preview(v, key) {
+  gen++; playing = false; await hush();
+  const l = v?.lang || (key === 'fil' ? 'fil-PH' : 'en-US');
+  const text = key === 'fil' ? 'Si Yahweh ang aking pastol; hindi ako magkukulang.' : 'The Lord is my shepherd; I shall not want.';
+  const p = speakWith(text, l, v, 0);
+  if (p) return p;
+  return new Promise((resolve) => { const u = new SpeechSynthesisUtterance(text); u.lang = l; u.rate = rate(); if (v?._w) u.voice = v._w; u.onend = u.onerror = () => resolve(); web().speak(u); });
+}
+
+let playVoice = null; // resolved once per play() so queued items keep their order
+function speak(text, g) {
+  const p = speakWith(text, lang(), playVoice, 1);
+  if (p) return p;
   return new Promise((resolve, reject) => {
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = lang(); u.rate = rate();
+    u.lang = lang(); u.rate = rate(); if (playVoice?._w) u.voice = playVoice._w;
     u.onend = () => resolve(); u.onerror = (e) => (e.error === 'interrupted' || e.error === 'canceled' ? resolve() : reject(e));
     if (g === gen) web().speak(u);
   });
@@ -40,10 +84,11 @@ async function hush() {
 
 // One-off phrase (guided prayers), in English, replacing anything being read
 export async function speakOnce(text, l = 'en-US') {
-  const n = native();
-  if (n) return n.speak({ text, lang: l, rate: rate(), pitch: 1, volume: 1, category: 'playback', queueStrategy: 0 });
+  const v = await chosenVoice(l);
+  const p = speakWith(text, l, v, 0);
+  if (p) return p;
   web()?.cancel();
-  return new Promise((resolve) => { const u = new SpeechSynthesisUtterance(text); u.lang = l; u.rate = rate(); u.onend = u.onerror = () => resolve(); web().speak(u); });
+  return new Promise((resolve) => { const u = new SpeechSynthesisUtterance(text); u.lang = l; u.rate = rate(); if (v?._w) u.voice = v._w; u.onend = u.onerror = () => resolve(); web().speak(u); });
 }
 export const hushNow = () => hush();
 
@@ -53,6 +98,7 @@ export async function play(from = idx) {
   if (!queue.length) return;
   const g = ++gen;
   await hush();
+  playVoice = await chosenVoice(lang());
   if (g !== gen) return;
   idx = Math.max(0, Math.min(from, queue.length - 1));
   playing = true; emit('play');

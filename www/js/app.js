@@ -862,6 +862,60 @@ function viewJournal() {
 }
 
 // ---------- reading options sheet ----------
+// ---------- read-aloud voice picker ----------
+const REGION = { US: 'US', GB: 'UK', AU: 'Australian', IN: 'Indian', PH: 'Philippine', CA: 'Canadian', IE: 'Irish', ZA: 'South African', NG: 'Nigerian' };
+function voiceLabel(v, i) {
+  const region = REGION[(v.lang || '').split(/[-_]/)[1]?.toUpperCase()] || '';
+  const where = /network/i.test(v.name || v.voiceURI || '') ? 'needs internet' : 'offline';
+  return { title: `Voice ${i + 1}`, sub: `${region ? `${region} accent · ` : ''}${where}` };
+}
+async function currentVoiceName(key) {
+  const want = state.voices?.[key];
+  if (!want) return 'Phone default';
+  const list = await Audio.voicesFor(key);
+  const i = list.findIndex((v) => v.voiceURI === want || v.name === want);
+  return i >= 0 ? `Voice ${i + 1}` : 'Phone default';
+}
+async function openVoicePicker(key) {
+  const list = (await Audio.voicesFor(key)).slice(0, 30);
+  const o = document.createElement('div');
+  o.className = 'overlay sheet-overlay';
+  const want = state.voices?.[key] || '';
+  const render = () => {
+    const cur = state.voices?.[key] || '';
+    o.innerHTML = `<div class="sheet voice-sheet" role="dialog" aria-label="Choose a voice">
+      <div class="sheet-grip"></div>
+      <div class="eyebrow">${key === 'fil' ? 'Tagalog and Cebuano voice' : 'English voice'}</div>
+      <p class="muted" style="margin:6px 0 10px;font-size:13px">Tap ▶ to hear each one, then choose the voice you like. Phones include both male and female voices.</p>
+      <div class="voice-list">
+        <div class="voice-row ${!cur ? 'on' : ''}"><button class="voice-pick" data-voice=""><span class="radio"></span><span><b>Phone default</b><small>Whatever your phone uses</small></span></button>
+          <button class="icon-btn voice-play" data-play="" aria-label="Preview phone default">${icon('play')}</button></div>
+        ${list.map((v, i) => { const L = voiceLabel(v, i); const id = v.voiceURI || v.name; return `
+        <div class="voice-row ${cur === id ? 'on' : ''}"><button class="voice-pick" data-voice="${esc(id)}"><span class="radio"></span><span><b>${L.title}</b><small>${esc(L.sub)}</small></span></button>
+          <button class="icon-btn voice-play" data-play="${esc(id)}" aria-label="Preview ${L.title}">${icon('play')}</button></div>`; }).join('')}
+        ${list.length ? '' : `<p class="muted" style="font-size:13px">No extra voices found. You can add voices in Android Settings → Text-to-speech output → Install voice data.</p>`}
+      </div>
+      <p class="muted" style="font-size:12px;margin:10px 0 0">More voices: Android Settings → Accessibility (or General management) → Text-to-speech output → Install voice data.</p>
+      <button class="btn primary block" data-done style="margin-top:12px">Done</button>
+    </div>`;
+  };
+  render();
+  document.body.appendChild(o);
+  const byId = (id) => list.find((v) => (v.voiceURI || v.name) === id) || null;
+  o.addEventListener('click', (e) => {
+    if (e.target === o || e.target.closest('[data-done]')) { Audio.hushNow(); o.remove(); if (location.hash.includes('settings')) route(); return; }
+    const pl = e.target.closest('[data-play]');
+    if (pl) { Audio.preview(byId(pl.dataset.play), key); return; }
+    const pk = e.target.closest('[data-voice]');
+    if (pk) { const v = byId(pk.dataset.voice); Audio.setVoice(key, v); haptic(); render(); Audio.preview(v, key); }
+  });
+  return want;
+}
+
+async function fillVoiceNames() {
+  for (const k of ['en', 'fil']) { const el = document.getElementById(`voice-${k}`); if (el) el.textContent = await currentVoiceName(k); }
+}
+
 function openReadingSheet() {
   const o = document.createElement('div');
   o.className = 'overlay sheet-overlay';
@@ -878,6 +932,8 @@ function openReadingSheet() {
         <div class="seg-ctl"><button data-sz="-">A−</button><button disabled style="min-width:58px">${Math.round(state.fontScale * 100)}%</button><button data-sz="+">A+</button></div></div>
       <div class="sheet-row"><span class="eyebrow">Font</span>
         <div class="seg-ctl"><button class="${state.readFont !== 'sans' ? 'on' : ''}" data-rf="serif" style="font-family:var(--serif)">Serif</button><button class="${state.readFont === 'sans' ? 'on' : ''}" data-rf="sans">Sans</button></div></div>
+      ${Audio.available() ? `<div class="sheet-row"><span class="eyebrow">Read-aloud voice</span>
+        <button class="btn small" data-voicepick="${Audio.langKey(TRANSLATIONS[currentTranslation()]?.lang || 'en')}">Choose</button></div>` : ''}
       <div class="sheet-row"><span class="eyebrow">Soft piano</span>
         <button class="switch ${music.isPlaying() ? 'on' : ''}" data-action="music" aria-label="Soft piano"></button></div>
       <div class="sheet-row"><span class="eyebrow">Page</span>
@@ -892,6 +948,8 @@ function openReadingSheet() {
   o.addEventListener('click', (e) => {
     if (e.target === o || e.target.closest('[data-done]')) return close();
     if (e.target.closest('[data-action=music]')) { setTimeout(render, 120); return; }
+    const vp = e.target.closest('[data-voicepick]');
+    if (vp) { openVoicePicker(vp.dataset.voicepick); return; }
     const tr = e.target.closest('[data-tr]');
     if (tr) {
       if (!hasKey(tr.dataset.tr)) { toast(`The ${tr.dataset.tr} needs a free API key. Add one in Settings → ${tr.dataset.tr} API key.`); return; }
@@ -1141,6 +1199,15 @@ function viewSettings() {
         <div class="item"><div class="t"><b>Volume</b></div><input type="range" id="mvol" min="0" max="100" value="${Math.round((state.music?.vol ?? 0.6) * 100)}" style="width:150px;accent-color:var(--accent)"></div>
       </div>
     </div>
+
+    ${Audio.available() ? `<div class="section">
+      <div class="section-head"><div class="h2">Read-aloud voice</div></div>
+      <div class="list">
+        <div class="item"><div class="t"><b>English</b><span id="voice-en">…</span></div><button class="btn small" data-voicepick="en">Choose</button></div>
+        <div class="item"><div class="t"><b>Tagalog and Cebuano</b><span id="voice-fil">…</span></div><button class="btn small" data-voicepick="fil">Choose</button></div>
+      </div>
+      <p class="help">Pick a male or female voice, with a preview of each. Speed is set in the player.</p>
+    </div>` : ''}
 
     <div class="section">
       <div class="section-head"><div class="h2">Reminders</div></div>
@@ -1430,7 +1497,7 @@ function routeView(same) {
   if (view === 'day') return viewToday(isDate(a) ? a : today());
   if (reader) return viewReader(a, b);
   if (view === 'journey') return viewJourney();
-  if (view === 'settings') { viewSettings(); fillSavedNote(); return; }
+  if (view === 'settings') { viewSettings(); fillSavedNote(); fillVoiceNames(); return; }
   if (view === 'catchup') return viewCatchup();
   if (view === 'prayer') return viewPrayerList();
   if (view === 'journal') return viewJournal();
@@ -1748,6 +1815,12 @@ document.addEventListener('click', async (e) => {
   if (a === 'new-year') {
     state.done.ot = {}; state.done.nt = {}; state.done.ps = {}; state.startDate = today(); save(); confetti(); route();
   }
+});
+
+// Voice picker buttons in Settings (the Aa sheet handles its own)
+document.addEventListener('click', (e) => {
+  const vp = e.target.closest('[data-voicepick]');
+  if (vp && !vp.closest('.sheet')) openVoicePicker(vp.dataset.voicepick);
 });
 
 document.addEventListener('submit', (e) => {
