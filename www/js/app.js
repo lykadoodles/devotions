@@ -744,6 +744,35 @@ function renderVerseBar() {
 
 function clearSelection() { selected.clear(); paintVerses(); renderVerseBar(); }
 
+// A little celebration when you react to a verse: the emoji pops on with its
+// own personality, a few copies float up, and the verse glows for a moment.
+const REACT_STYLE = { '❤️': 'beat', '💔': 'shake', '😭': 'shake', '😢': 'shake', '✨': 'spin', '💡': 'spin' };
+function animateReaction(keys, emoji) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const style = REACT_STYLE[emoji] || 'bounce';
+  let anchor = null;
+  for (const k of keys) {
+    document.querySelectorAll(`.scripture span.v[data-k="${k}"]`).forEach((sp) => {
+      sp.classList.remove('glow'); void sp.offsetWidth; sp.classList.add('glow');
+      sp.addEventListener('animationend', () => sp.classList.remove('glow'), { once: true });
+      const sup = sp.nextElementSibling;
+      if (sup?.matches('sup.vreact')) { sup.classList.add('pop', `pop-${style}`); anchor = sup; }
+    });
+  }
+  if (!anchor) return;
+  const r = anchor.getBoundingClientRect();
+  const n = emoji === '❤️' || emoji === '✨' ? 9 : 7;
+  for (let i = 0; i < n; i++) {
+    const f = document.createElement('span');
+    f.className = 'emo-float';
+    f.textContent = emoji;
+    const spread = style === 'shake' ? 50 : 90;
+    f.style.cssText = `left:${r.left + r.width / 2}px;top:${r.top + r.height / 2}px;--dx:${Math.round((Math.random() - .5) * spread * 2)}px;--dy:${-Math.round(70 + Math.random() * 110)}px;--r:${Math.round((Math.random() - .5) * 70)}deg;--s:${(.7 + Math.random() * .7).toFixed(2)};animation-delay:${Math.round(Math.random() * 160)}ms`;
+    document.body.appendChild(f);
+    f.addEventListener('animationend', () => f.remove(), { once: true });
+  }
+}
+
 async function shareVerses(text, title) {
   const Sh = P().Share;
   try {
@@ -1428,8 +1457,9 @@ document.addEventListener('click', async (e) => {
     const items = selectedItems();
     const already = items.every((i) => J.reactionOf(i.k)?.emoji === el.dataset.emoji);
     J.setReaction(items, already ? null : el.dataset.emoji, readerTr);
-    haptic();
+    haptic(already ? 'light' : 'success');
     clearSelection();
+    if (!already) animateReaction(items.map((i) => i.k), el.dataset.emoji);
     showBadges(checkBadges());
   }
   if (a === 'v-hl') {

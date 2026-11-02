@@ -667,3 +667,26 @@ body:has(#vbar) .aplayer { display: none; }
 .rhema-bell.on { color: var(--flame-hi); }
 .rhema-bell.on svg { fill: currentColor; fill-opacity: .25; }
 .tr-opt i { white-space: nowrap; }
+
+/* ---------- reaction animations ---------- */
+.scripture sup.vreact { display: inline-block; }
+.scripture sup.vreact.pop { animation: react-pop .55s cubic-bezier(.3,1.6,.5,1) both; transform-origin: 50% 80%; }
+.scripture sup.vreact.pop-beat { animation: react-pop .5s cubic-bezier(.3,1.6,.5,1) both, react-beat .9s ease-in-out .5s 2; }
+.scripture sup.vreact.pop-shake { animation: react-pop .5s cubic-bezier(.3,1.6,.5,1) both, react-shake .5s ease-in-out .45s 2; }
+.scripture sup.vreact.pop-spin { animation: react-spin .8s cubic-bezier(.3,1.4,.5,1) both; }
+.scripture sup.vreact.pop-bounce { animation: react-pop .5s cubic-bezier(.3,1.6,.5,1) both, react-hop .6s ease-out .45s 1; }
+@keyframes react-pop { 0% { transform: scale(0) rotate(-25deg); opacity: 0; } 60% { transform: scale(1.8) rotate(8deg); opacity: 1; } 100% { transform: scale(1) rotate(0); } }
+@keyframes react-beat { 0%,100% { transform: scale(1); } 20% { transform: scale(1.35); } 40% { transform: scale(1); } 60% { transform: scale(1.22); } }
+@keyframes react-shake { 0%,100% { transform: translateX(0) rotate(0); } 25% { transform: translateX(-2px) rotate(-10deg); } 75% { transform: translateX(2px) rotate(10deg); } }
+@keyframes react-spin { 0% { transform: scale(0) rotate(-200deg); opacity: 0; } 70% { transform: scale(1.6) rotate(20deg); opacity: 1; } 100% { transform: scale(1) rotate(0); } }
+@keyframes react-hop { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-.5em) scale(1.15); } 70% { transform: translateY(0) scale(.95, 1.05); } }
+.scripture span.v.glow { animation: verse-glow 1.1s ease-out; }
+@keyframes verse-glow { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--flame) 0%, transparent); background-color: transparent; } 25% { box-shadow: 0 0 18px 2px color-mix(in srgb, var(--flame-hi) 45%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.emo-float { position: fixed; z-index: 80; pointer-events: none; font-size: 26px; line-height: 1; margin: -13px 0 0 -13px;
+  font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif; animation: emo-float 1.25s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes emo-float {
+  0% { transform: translate(0, 0) scale(.2) rotate(0); opacity: 0; }
+  15% { opacity: 1; }
+  45% { transform: translate(calc(var(--dx) * .7), calc(var(--dy) * .7)) scale(var(--s)) rotate(calc(var(--r) * .6)); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(calc(var(--s) * .8)) rotate(var(--r)); opacity: 0; }
+}
