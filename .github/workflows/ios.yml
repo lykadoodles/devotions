@@ -1,0 +1,102 @@
+name: Build iOS
+
+# Builds Lamp for iPhone on GitHub's Mac machines (no Mac needed).
+# - Without App Store Connect secrets: a check build for the simulator, to make
+#   sure everything compiles.
+# - With the secrets below: signs the app and uploads it to TestFlight.
+#     APPSTORE_KEY_ID      Key ID of an App Store Connect API key (Admin or App Manager)
+#     APPSTORE_ISSUER_ID   Issuer ID shown on the same page
+#     APPSTORE_KEY_P8      The full contents of the downloaded AuthKey_XXXX.p8 file
+#     APPLE_TEAM_ID        Your 10-character Team ID (developer.apple.com → Membership)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    env:
+      HAS_ASC: ${{ secrets.APPSTORE_KEY_ID != '' && secrets.APPSTORE_ISSUER_ID != '' && secrets.APPSTORE_KEY_P8 != '' && secrets.APPLE_TEAM_ID != '' }}
+      BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Add Bible API keys
+        env:
+          NLT_API_KEY: ${{ secrets.NLT_API_KEY }}
+          ESV_API_KEY: ${{ secrets.ESV_API_KEY }}
+        run: printf "export const NLT_KEY = '%s';\nexport const ESV_KEY = '%s';\n" "$NLT_API_KEY" "$ESV_API_KEY" > www/js/config.js
+
+      - name: Create iOS project
+        run: |
+          npx cap add ios
+          npx capacitor-assets generate --ios \
+            --iconBackgroundColor '#1f44c4' --iconBackgroundColorDark '#1f44c4' \
+            --splashBackgroundColor '#1f44c4' --splashBackgroundColorDark '#1f44c4'
+          npx cap sync ios
+          PL=ios/App/App/Info.plist
+          # Keep reading aloud with the screen off (audio Bible)
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" "$PL" || true
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string audio" "$PL"
+          # Lamp uses only standard HTTPS: no export-compliance questions on each upload
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PL"
+          # Privacy manifest (no data collected, no tracking)
+          cp scripts/ios/PrivacyInfo.xcprivacy ios/App/App/
+          gem list -i xcodeproj >/dev/null || sudo gem install xcodeproj --no-document
+          ruby scripts/ios/add-privacy.rb
+
+      - name: Check build (simulator)
+        if: env.HAS_ASC != 'true'
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            MARKETING_VERSION=1.0.$BUILD_NUMBER CURRENT_PROJECT_VERSION=$BUILD_NUMBER \
+            CODE_SIGNING_ALLOWED=NO build | tail -40
+          echo "::notice::iOS check build passed. Add the App Store Connect secrets to upload to TestFlight."
+
+      - name: Archive and upload to TestFlight
+        if: env.HAS_ASC == 'true'
+        env:
+          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          KEY_P8: ${{ secrets.APPSTORE_KEY_P8 }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/keys"
+          KEY="$RUNNER_TEMP/keys/AuthKey_$KEY_ID.p8"
+          printf '%s\n' "$KEY_P8" > "$KEY"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID")
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Lamp.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION=1.0.$BUILD_NUMBER CURRENT_PROJECT_VERSION=$BUILD_NUMBER \
+            "${AUTH[@]}" archive | tail -40
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Lamp.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
+            "${AUTH[@]}" | tail -40
+          echo "::notice::Lamp 1.0.$BUILD_NUMBER uploaded to App Store Connect. It appears in TestFlight after Apple finishes processing (about 10–30 minutes)."
