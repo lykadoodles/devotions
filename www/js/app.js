@@ -439,7 +439,7 @@ function viewToday(date) {
         </div>
       </div>
       <p class="rhema-text" id="rhema-text">&nbsp;</p>
-      <div class="rhema-ref" id="rhema-ref">&nbsp;</div>
+      <div class="rhema-foot"><div class="rhema-ref" id="rhema-ref">&nbsp;</div><button class="link-btn" data-action="rhema-open">Read in context</button></div>
     </section>`}
 
     ${miss.length ? `
@@ -498,7 +498,7 @@ async function loadRhema(idx = currentRhemaIndex()) {
   const rEl = () => document.getElementById('rhema-ref');
   const show = (res) => {
     if (token !== rhemaToken || !tEl()) return;
-    rhemaShown = { ref, ...res };
+    rhemaShown = { ref, range, ...res };
     tEl().textContent = res.text ? `“${res.text}”` : '';
     rEl().textContent = `${ref}${res.translation ? ` · ${res.translation}` : ''}`;
     box.classList.add('fresh'); setTimeout(() => box.classList.remove('fresh'), 600);
@@ -827,6 +827,7 @@ function viewJournal() {
       <p class="jc-verse">${esc(J.quote(n.text))}</p>
       ${n.note ? `<p class="jc-note">${esc(n.note)}</p>` : ''}
       <div class="pc-actions">
+        <button class="pc-btn" data-action="open-verse" data-k="${n.keys[0]}">${icon('book')}<span>Read</span></button>
         <button class="pc-btn" data-action="j-share" data-id="${n.id}">${icon('share')}<span>Share</span></button>
         <button class="pc-btn more" data-action="j-menu" data-id="${n.id}" aria-label="More"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
       </div>
@@ -836,6 +837,7 @@ function viewJournal() {
       <div class="jc-head"><b>${esc(J.refOf([h.k]))}${h.emoji ? ` <span class="jc-emo">${h.emoji}</span>` : ''}</b><span>${esc(fmtDate(h.date, { month: 'short', day: 'numeric' }))}${h.tr ? ` · ${esc(h.tr)}` : ''}</span></div>
       <p class="jc-verse">${esc(h.text)}</p>
       <div class="pc-actions">
+        <button class="pc-btn" data-action="open-verse" data-k="${h.k}">${icon('book')}<span>Read</span></button>
         <button class="pc-btn" data-action="h-share" data-k="${h.k}">${icon('share')}<span>Share</span></button>
         <button class="pc-btn more" data-action="h-remove" data-k="${h.k}" aria-label="Remove"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
@@ -971,6 +973,178 @@ function openReadingSheet() {
     const pg = e.target.closest('[data-pg]');
     if (pg) { state.readPage = pg.dataset.pg; save(); haptic(); applyTheme(); render(); }
   });
+}
+
+// ---------- Bible: read and browse freely (outside the plan) ----------
+// Free reading never touches the plan, streaks or "Mark as read".
+let bibleTestament = 'ot';
+const bibleHref = (b, c, v) => `#/bible/${b}${c ? `/${c}` : ''}${c && v ? `/${v}` : ''}`;
+const freeRange = (key) => { const [b, c] = key.split('.').map(Number); return [[b, c, 1], [b, c, META.books[b].verses[c - 1]]]; };
+
+// Chapters already read in the plan (lightly marked in the chapter grid)
+function planReadChapters() {
+  const set = new Set();
+  for (const track of TRACK_ORDER) for (const key of Object.keys(state.done[track] || {})) {
+    const r = readingFor(track, key); if (!r) continue;
+    for (const ch of chapters(r.range)) set.add(`${ch.b}.${ch.c}`);
+  }
+  return set;
+}
+
+// "John 3:16", "jn 3", "1 cor 13", "Psalm 23", "Juan 3:16", "Mga Awit 23", "Salmo 23"
+const BOOK_ABBR = { jn: 'john', jhn: 'john', mt: 'matthew', mk: 'mark', mrk: 'mark', lk: 'luke', ps: 'psalms', psa: 'psalms',
+  psalm: 'psalms', pr: 'proverbs', prov: 'proverbs', rom: 'romans', rev: 'revelation', jas: 'james', phil: 'philippians',
+  phm: 'philemon', eccl: 'ecclesiastes', song: 'songofsongs', sos: 'songofsongs', ezek: 'ezekiel', dt: 'deuteronomy',
+  gn: 'genesis', ex: 'exodus', lev: 'leviticus', num: 'numbers', josh: 'joshua', judg: 'judges', isa: 'isaiah', jer: 'jeremiah',
+  dan: 'daniel', hos: 'hosea', mic: 'micah', zech: 'zechariah', mal: 'malachi', heb: 'hebrews', gal: 'galatians', eph: 'ephesians',
+  col: 'colossians', awit: 'psalms', salmo: 'psalms', kawikaan: 'proverbs', panultihon: 'proverbs', juan: 'john', mateo: 'matthew',
+  marcos: 'mark', lucas: 'luke', gawa: 'acts', buhat: 'acts', pahayag: 'revelation', pinadayag: 'revelation' };
+const normName = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(mga|ang|sa|taga)\b/g, '').replace(/[^a-z0-9]/g, '');
+let bookIndexCache = null;
+async function loadBookNames() {
+  if (bookIndexCache) return bookIndexCache;
+  const lists = [META.books.map((b) => b.name)];
+  for (const code of ['tgl', 'ceb']) { try { lists.push(await (await fetch(`data/${code}/names.json`)).json()); } catch {} }
+  bookIndexCache = [];
+  lists.forEach((names) => names.forEach((n, i) => { if (n) bookIndexCache.push([normName(n), i]); }));
+  return bookIndexCache;
+}
+loadBookNames().catch(() => {});
+function findBook(q) {
+  let n = normName(q);
+  if (!n) return -1;
+  const num = n.match(/^[1-3]/)?.[0] || '';
+  const ab = BOOK_ABBR[n] || BOOK_ABBR[n.slice(num.length)];
+  if (ab) n = (BOOK_ABBR[n] ? '' : num) + ab;
+  const idx = bookIndexCache || META.books.map((b, i) => [normName(b.name), i]);
+  const exact = idx.find(([k]) => k === n); if (exact) return exact[1];
+  const pre = idx.find(([k]) => k.startsWith(n) && n.length >= 2); if (pre) return pre[1];
+  return -1;
+}
+function parseRef(q) {
+  const m = (q || '').trim().match(/^((?:[1-3]\s*)?[^\d:]+?)\s*(\d+)?\s*(?:[:.,]\s*(\d+))?\s*$/);
+  if (!m) return null;
+  const b = findBook(m[1]);
+  if (b < 0) return null;
+  const n = META.books[b].verses.length;
+  let c = m[2] ? +m[2] : 0, v = m[3] ? +m[3] : 0;
+  if (n === 1 && c && !v) { v = c; c = 1; }          // "Jude 3" = verse 3
+  if (c > n) return null;
+  if (c && v > META.books[b].verses[c - 1]) v = 0;
+  return { b, c: n === 1 && !c ? 1 : c, v };
+}
+
+function viewBible() {
+  $tabs.hidden = false;
+  const read = planReadChapters();
+  const [from, to] = bibleTestament === 'ot' ? [0, 38] : [39, 65];
+  const last = state.lastFree && META.books[state.lastFree.b] ? state.lastFree : null;
+  $app.innerHTML = `
+    <header class="top rise"><div><div class="eyebrow">Read freely</div><h1 class="h1">Bible</h1></div></header>
+    <form class="goto rise" data-form="goto" autocomplete="off">
+      <input id="goto" class="field" type="search" placeholder="Go to… John 3:16" enterkeyhint="go">
+      <button class="btn primary small" type="submit">Go</button>
+    </form>
+    <p class="help goto-err" id="goto-err" hidden></p>
+    ${last ? `<a class="banner rise cont-read" href="${bibleHref(last.b, last.c)}">
+      <div class="t"><b>Continue reading</b><span class="muted">${esc(label(freeRange(`${last.b}.${last.c}`)))} · ${esc(currentTranslation())}</span></div>
+      <div class="icon-btn">${icon('arrow')}</div></a>` : ''}
+    <div class="seg-ctl tst rise">
+      <button class="${bibleTestament === 'ot' ? 'on' : ''}" data-action="bible-tst" data-tst="ot">Old Testament</button>
+      <button class="${bibleTestament === 'nt' ? 'on' : ''}" data-action="bible-tst" data-tst="nt">New Testament</button>
+    </div>
+    <div class="book-grid rise">
+      ${META.books.slice(from, to + 1).map((bk, j) => {
+        const b = from + j, n = bk.verses.length;
+        let done = 0; for (let c = 1; c <= n; c++) if (read.has(`${b}.${c}`)) done++;
+        return `<a class="book-cell" href="${bibleHref(b)}"><b>${esc(bk.name)}</b><span>${n} ch</span><i style="width:${Math.round((done / n) * 100)}%"></i></a>`;
+      }).join('')}
+    </div>
+    <p class="help" style="text-align:center">Reading here doesn’t change your plan or streak.</p>`;
+}
+
+function viewBibleBook(b) {
+  const bk = META.books[b];
+  if (!bk) { location.hash = '#/bible'; return; }
+  if (bk.verses.length === 1) { location.replace(bibleHref(b, 1)); return; }
+  $tabs.hidden = false;
+  const read = planReadChapters();
+  $app.innerHTML = `
+    <header class="top rise"><div><a class="eyebrow" href="#/bible">← Bible</a><h1 class="h1">${esc(bk.name)}</h1>
+      <p class="muted" style="margin:4px 0 0">${bk.verses.length} chapters · shaded ones you’ve read in your plan</p></div></header>
+    <div class="ch-grid rise">${bk.verses.map((_, i) => `<a class="ch-cell ${read.has(`${b}.${i + 1}`) ? 'read' : ''}" href="${bibleHref(b, i + 1)}">${i + 1}</a>`).join('')}</div>`;
+}
+
+async function viewFreeReader(b, c, v) {
+  const bk = META.books[b];
+  if (!bk || !bk.verses[c - 1]) { location.hash = '#/bible'; return; }
+  $app.classList.add('reader-mode'); applyTheme();
+  const key = `${b}.${c}`, range = freeRange(key), ref = label(range);
+  const nChap = bk.verses.length;
+  const prev = c > 1 ? [b, c - 1] : b > 0 ? [b - 1, META.books[b - 1].verses.length] : null;
+  const next = c < nChap ? [b, c + 1] : b < META.books.length - 1 ? [b + 1, 1] : null;
+  let shown = null;
+  const renderTop = () => `
+    <div class="reader-top t-free">
+      <div class="row">
+        <a class="icon-btn" href="${bibleHref(b)}" aria-label="Back">${icon('back')}</a>
+        <button class="reader-title as-btn" data-action="reading-sheet" aria-label="Change translation and reading options">
+          <div class="track">${b <= 38 ? 'Old Testament' : 'New Testament'}</div>
+          <div class="ref">${esc(ref)}<span class="ref-tr"> · <span class="tr-name">${shown || currentTranslation()}</span><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></div>
+        </button>
+        <button class="icon-btn" data-action="reading-sheet" aria-label="Text options"><span style="font-family:var(--serif);font-size:19px;font-weight:600">Aa</span></button>
+      </div>
+      <div class="progress" id="rprog"></div>
+    </div>`;
+  $app.innerHTML = `${renderTop()}<div class="loading"><div class="spinner"></div></div>`;
+  state.lastFree = { b, c }; save();
+  let res;
+  try { res = await passage(range); } catch (e) { res = { html: `<p>Couldn’t load this chapter. ${esc(e.message || '')}</p>`, translation: '' }; }
+  const here = () => location.hash.startsWith(`#/bible/${b}/${c}`);
+  if (!here()) return;
+  shown = res.translation || null;
+  $app.innerHTML = `
+    ${renderTop()}
+    ${res.note ? `<div class="note" style="margin:12px 16px 0">${esc(res.note)}</div>` : ''}
+    <article class="scripture t-free">${res.html}</article>
+    <div class="reader-foot free-foot">
+      <div class="free-nav">
+        ${prev ? `<a class="btn block" href="${bibleHref(prev[0], prev[1])}">${icon('back')} ${esc(label(freeRange(`${prev[0]}.${prev[1]}`)))}</a>` : '<span></span>'}
+        ${next ? `<a class="btn block" href="${bibleHref(next[0], next[1])}">${esc(label(freeRange(`${next[0]}.${next[1]}`)))} ${icon('arrow')}</a>` : '<span></span>'}
+      </div>
+      <p class="help" style="text-align:center"><button class="link-btn" data-action="reading-sheet"><span class="tr-name">${res.translation || ''}</span> · change</button></p>
+      <p class="copyright">${NOTICES[res.translation] || ''}</p>
+    </div>
+    ${Audio.available() ? `<button class="listen-fab" data-action="listen" aria-label="Listen to this chapter">${icon('headphones')}<span>Listen</span></button>` : ''}`;
+  window.scrollTo(0, 0);
+  readerTr = res.translation;
+  tagVerses(document.querySelector('.scripture'), range);
+  paintVerses();
+  readerShown = { track: 'free', key };
+  afterReaderRender('free', key);
+  const prog = document.getElementById('rprog');
+  window.onscroll = () => { const h = document.documentElement.scrollHeight - innerHeight; if (prog) prog.style.width = `${h > 0 ? Math.min(100, (scrollY / h) * 100) : 100}%`; };
+  if (v) {
+    const sp = document.querySelector(`.scripture span.v[data-k="${b}.${c}.${v}"]`);
+    if (sp) { requestAnimationFrame(() => { const r = sp.getBoundingClientRect(); window.scrollTo(0, scrollY + r.top - innerHeight * 0.3); }); document.querySelectorAll(`.scripture span.v[data-k="${b}.${c}.${v}"]`).forEach((x) => x.classList.add('glow')); }
+  }
+  if (res.fellBack) (async () => {
+    for (const wait of [6000, 20000, 45000]) {
+      await sleep(wait);
+      if (!here()) return;
+      let up; try { up = await passage(range, { patient: true }); } catch { continue; }
+      if (up.fellBack || !here()) continue;
+      if (Audio.isActive() && Audio.snapshot().playing) return;
+      const art = document.querySelector('.scripture'); if (!art) return;
+      art.innerHTML = up.html; tagVerses(art, range); paintVerses();
+      $app.querySelector(':scope > .note')?.remove();
+      shown = up.translation; readerTr = up.translation;
+      document.querySelectorAll('.tr-name').forEach((x) => { x.textContent = up.translation; });
+      const cp = $app.querySelector('.copyright'); if (cp) cp.textContent = NOTICES[up.translation] || '';
+      toast(`Now showing the ${up.translation}`);
+      return;
+    }
+  })();
 }
 
 // ---------- guided prayer ----------
@@ -1369,7 +1543,7 @@ let autoplayPending = false;   // start reading once the reader has rendered
 let followNav = false;         // the next reader render came from playback moving on
 let musicVolBefore = null;
 const samePortion = (a, b) => a && b && a.track === b.track && String(a.key) === String(b.key);
-const hashPortion = () => { const [, v, a, b] = (location.hash || '').split('/'); return v === 'read' ? { track: a, key: b } : null; };
+const hashPortion = () => { const [, v, a, b] = (location.hash || '').split('/'); return v === 'read' ? { track: a, key: b } : v === 'bible' && b ? { track: 'free', key: `${a}.${b}` } : null; };
 
 function duckMusic(on) {
   if (on && music.isPlaying() && musicVolBefore == null) { musicVolBefore = state.music?.vol ?? .6; music.setVolume(musicVolBefore * .3); }
@@ -1436,8 +1610,8 @@ async function listenHere() {
   const root = document.querySelector('.scripture');
   if (!here || !root) return;
   if (Audio.isActive() && Audio.snapshot().queue.some((q) => samePortion(q.portion, here))) { Audio.toggle(); return; }
-  const r = readingFor(here.track, here.key);
-  const portion = { ...here, label: label(r.range), intro: `${TRACK_SPOKEN[readerTr]?.[here.track] || TRACKS[here.track].name}.` };
+  const r = here.track === 'free' ? { range: freeRange(here.key) } : readingFor(here.track, here.key);
+  const portion = { ...here, label: label(r.range), intro: here.track === 'free' ? '' : `${TRACK_SPOKEN[readerTr]?.[here.track] || TRACKS[here.track].name}.` };
   const items = Audio.itemsFrom(root, portion, readerTr);
   let start = 0;
   if (scrollY > 150) {
@@ -1496,16 +1670,17 @@ function routeView(same) {
   selected.clear(); document.getElementById('vbar')?.remove();
   $app.classList.remove('reader-mode'); applyTheme();
   if (!state.onboarded) return viewWelcome();
-  const [, view, a, b] = (location.hash || '#/today').split('/');
+  const [, view, a, b, c] = (location.hash || '#/today').split('/');
   const isDate = (x) => /^\d{4}-\d{2}-\d{2}$/.test(x || '');
   if (view === 'devo') { const d = isDate(a) ? a : today(); const n = nextDevoStep(d); location.replace(n || dayHref(d)); return; }
-  const reader = view === 'read' || view === 'pray';
+  const reader = view === 'read' || view === 'pray' || (view === 'bible' && !!b);
   $tabs.hidden = reader;
   if (!reader && music.isPlaying()) { music.stop(); }
   $tabs.querySelectorAll('a').forEach((x) => x.classList.toggle('on', x.dataset.tab === (view === 'day' ? 'today' : view === 'journal' ? 'journey' : view || 'today')));
   if (!reader && !same) window.scrollTo(0, 0);
   if (view === 'pray') return viewPrayer(a === 'close' ? 'close' : 'open', isDate(b) && b > today() ? b : today());
   if (view === 'day') return viewToday(isDate(a) ? a : today());
+  if (view === 'bible') return b ? viewFreeReader(+a, +b, +c || 0) : a ? viewBibleBook(+a) : viewBible();
   if (reader) return viewReader(a, b);
   if (view === 'journey') return viewJourney();
   if (view === 'settings') { viewSettings(); fillSavedNote(); fillVoiceNames(); return; }
@@ -1728,6 +1903,9 @@ document.addEventListener('click', async (e) => {
       }
     }
   }
+  if (a === 'rhema-open' && rhemaShown?.range) { const [[b, c, v]] = rhemaShown.range; location.hash = bibleHref(b, c, v); return; }
+  if (a === 'open-verse') { const [b, c, v] = el.dataset.k.split('.').map(Number); location.hash = bibleHref(b, c, v); return; }
+  if (a === 'bible-tst') { bibleTestament = el.dataset.tst; route(); return; }
   if (a === 'drama-toggle') {
     state.drama = !Audio.dramaOn(); save(); haptic();
     toast(state.drama ? 'Dramatized voices on' : 'Dramatized voices off');
@@ -1842,6 +2020,15 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('submit', (e) => {
+  if (e.target.dataset.form === 'goto') {
+    e.preventDefault();
+    const q = document.getElementById('goto').value;
+    const hit = parseRef(q);
+    const err = document.getElementById('goto-err');
+    if (!hit) { if (err) { err.hidden = false; err.textContent = `Couldn't find “${q}”. Try something like John 3:16, Psalm 23 or Juan 3.`; } return; }
+    location.hash = hit.c ? bibleHref(hit.b, hit.c, hit.v) : bibleHref(hit.b);
+    return;
+  }
   if (e.target.dataset.form === 'pl-add') {
     e.preventDefault();
     const text = document.getElementById('pl-text').value;
