@@ -5,6 +5,7 @@
 // follow-along highlight whenever the app is in front.
 import { state, save } from './store.js';
 import { TRANSLATIONS } from './text.js';
+import { newContext, segments } from './drama.js';
 // Voice language follows the translation (Filipino voice for Tagalog/Cebuano)
 const lang = () => TRANSLATIONS[state.translation]?.lang || 'en-US';
 
@@ -49,31 +50,76 @@ async function chosenVoice(l) {
   if (!want) return null;
   return (await voices()).find((v) => v.voiceURI === want || v.name === want) || null;
 }
-export function setVoice(key, v) { state.voices = { ...(state.voices || {}), [key]: v ? (v.voiceURI || v.name) : '' }; save(); }
+export function setVoice(key, v, role = 'narrator') {
+  const id = v ? (v.voiceURI || v.name) : '';
+  if (role === 'narrator') state.voices = { ...(state.voices || {}), [key]: id };
+  else state.dramaVoices = { ...(state.dramaVoices || {}), [key]: { ...(state.dramaVoices?.[key] || {}), [role]: id } };
+  save();
+}
+export const voiceIdFor = (key, role = 'narrator') => (role === 'narrator' ? state.voices?.[key] : state.dramaVoices?.[key]?.[role]) || '';
+export const dramaOn = () => state.drama !== false;
 
-function speakWith(text, l, v, queueStrategy) {
+// Dramatized reading: each character role gets its own voice. Without a chosen
+// voice, the narrator's voice is pitched (lower for men, higher for women, and
+// lower and a little slower for God) so the roles still sound different.
+const ROLE_TONE = {
+  narrator: { pitch: 1, rate: 1 },
+  male: { pitch: 0.85, rate: 1 },
+  female: { pitch: 1.25, rate: 1 },
+  god: { pitch: 0.72, rate: 0.9 },
+};
+async function voiceFor(key, role) {
+  const id = voiceIdFor(key, role);
+  return id ? (await voices()).find((v) => v.voiceURI === id || v.name === id) || null : null;
+}
+async function rolePlan(key, role) {
+  if (role === 'narrator') return { v: await voiceFor(key, 'narrator'), pitch: 1, rate: 1 };
+  const own = await voiceFor(key, role);
+  const t = ROLE_TONE[role];
+  if (own) return { v: own, pitch: role === 'god' ? 0.92 : 1, rate: role === 'god' ? t.rate : 1 };
+  return { v: await voiceFor(key, 'narrator'), pitch: t.pitch, rate: t.rate };
+}
+
+function speakWith(text, l, v, queueStrategy, tone = { pitch: 1, rate: 1 }) {
   const n = native();
-  if (n) return n.speak({ text, lang: l, rate: rate(), pitch: 1, volume: 1, category: 'playback', queueStrategy, ...(v ? { voice: v.index } : {}) });
+  if (n) return n.speak({ text, lang: l, rate: rate() * tone.rate, pitch: tone.pitch, volume: 1, category: 'playback', queueStrategy, ...(v ? { voice: v.index } : {}) });
   return null;
+}
+function speakWeb(text, l, v, tone, onerror) {
+  return new Promise((resolve, reject) => {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = l; u.rate = rate() * (tone?.rate || 1); u.pitch = tone?.pitch || 1; if (v?._w) u.voice = v._w;
+    u.onend = () => resolve(); u.onerror = (e) => (onerror ? (e.error === 'interrupted' || e.error === 'canceled' ? resolve() : reject(e)) : resolve());
+    web().speak(u);
+  });
 }
 
 // Plays a short sample in a voice (Settings / voice picker)
-export async function preview(v, key) {
+const SAMPLES = {
+  en: { narrator: 'The Lord is my shepherd; I shall not want.', male: 'Here am I. Send me!', female: 'My soul magnifies the Lord.', god: 'I am who I am.' },
+  fil: { narrator: 'Si Yahweh ang aking pastol; hindi ako magkukulang.', male: 'Narito ako, isugo mo ako.', female: 'Pinupuri ng aking kaluluwa ang Panginoon.', god: 'Ako ay si Ako nga.' },
+};
+export async function preview(v, key, role = 'narrator') {
   gen++; playing = false; await hush();
   const l = v?.lang || (key === 'fil' ? 'fil-PH' : 'en-US');
-  const text = key === 'fil' ? 'Si Yahweh ang aking pastol; hindi ako magkukulang.' : 'The Lord is my shepherd; I shall not want.';
-  const p = speakWith(text, l, v, 0);
+  const text = SAMPLES[key]?.[role] || SAMPLES.en.narrator;
+  // no voice chosen for a character: preview the pitched narrator
+  let plan = { v, pitch: 1, rate: 1 };
+  if (role !== 'narrator') plan = v ? { v, pitch: role === 'god' ? 0.92 : 1, rate: role === 'god' ? ROLE_TONE.god.rate : 1 } : { v: await voiceFor(key, 'narrator'), ...ROLE_TONE[role] };
+  const p = speakWith(text, plan.v?.lang || l, plan.v, 0, plan);
   if (p) return p;
-  return new Promise((resolve) => { const u = new SpeechSynthesisUtterance(text); u.lang = l; u.rate = rate(); if (v?._w) u.voice = v._w; u.onend = u.onerror = () => resolve(); web().speak(u); });
+  web()?.cancel();
+  return speakWeb(text, plan.v?.lang || l, plan.v, plan);
 }
 
-let playVoice = null; // resolved once per play() so queued items keep their order
-function speak(text, g) {
-  const p = speakWith(text, lang(), playVoice, 1);
+let plans = null; // role -> { v, pitch, rate }, resolved once per play() so queued items keep their order
+function speak(item, g) {
+  const plan = plans?.[item.role || 'narrator'] || plans?.narrator || { v: null, pitch: 1, rate: 1 };
+  const p = speakWith(item.text, lang(), plan.v, 1, plan);
   if (p) return p;
   return new Promise((resolve, reject) => {
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = lang(); u.rate = rate(); if (playVoice?._w) u.voice = playVoice._w;
+    const u = new SpeechSynthesisUtterance(item.text);
+    u.lang = lang(); u.rate = rate() * plan.rate; u.pitch = plan.pitch; if (plan.v?._w) u.voice = plan.v._w;
     u.onend = () => resolve(); u.onerror = (e) => (e.error === 'interrupted' || e.error === 'canceled' ? resolve() : reject(e));
     if (g === gen) web().speak(u);
   });
@@ -88,7 +134,7 @@ export async function speakOnce(text, l = 'en-US') {
   const p = speakWith(text, l, v, 0);
   if (p) return p;
   web()?.cancel();
-  return new Promise((resolve) => { const u = new SpeechSynthesisUtterance(text); u.lang = l; u.rate = rate(); if (v?._w) u.voice = v._w; u.onend = u.onerror = () => resolve(); web().speak(u); });
+  return speakWeb(text, l, v);
 }
 export const hushNow = () => hush();
 
@@ -98,13 +144,15 @@ export async function play(from = idx) {
   if (!queue.length) return;
   const g = ++gen;
   await hush();
-  playVoice = await chosenVoice(lang());
+  const key = langKey(lang());
+  plans = {};
+  for (const r of ['narrator', 'male', 'female', 'god']) plans[r] = await rolePlan(key, r);
   if (g !== gen) return;
   idx = Math.max(0, Math.min(from, queue.length - 1));
   playing = true; emit('play');
   for (let i = idx; i < queue.length; i++) {
     const me = i;
-    speak(queue[i].text, g).then(() => {
+    speak(queue[i], g).then(() => {
       if (g !== gen) return;
       idx = me + 1;
       if (idx >= queue.length) { playing = false; idx = queue.length - 1; emit('end'); }
@@ -122,7 +170,8 @@ export const indexOf = (pred) => queue.findIndex(pred);
 
 // Turns rendered scripture (verses already wrapped in span.v[data-k]) into items:
 // one per chapter title and one per verse.
-export function itemsFrom(root, portion) {
+export function itemsFrom(root, portion, tr = state.translation) {
+  const verses = [];
   const out = [];
   if (portion?.intro) out.push({ text: portion.intro, portion, kind: 'title' });
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
@@ -136,8 +185,18 @@ export function itemsFrom(root, portion) {
       const words = t.textContent.replace(/\s+/g, ' ').trim();
       if (!words) continue;
       if (last && last.k === n.dataset.k) last.text += ` ${words}`;
-      else { last = { k: n.dataset.k, text: words, portion }; out.push(last); }
+      else { last = { k: n.dataset.k, text: words, portion }; out.push(last); verses.push(last); }
     }
   }
-  return out;
+  if (!dramaOn()) return out;
+  // Dramatized: split each verse into narration and characters' lines
+  const dlang = tr === 'TGL' ? 'tgl' : tr === 'CEB' ? 'ceb' : 'en';
+  let ctx = null, ctxBook = -1;
+  return out.flatMap((it) => {
+    if (!it.k) return [it];
+    const book = +it.k.split('.')[0];
+    if (!ctx || book !== ctxBook) { ctx = newContext(dlang, book); ctxBook = book; }
+    const segs = segments(it.text, ctx);
+    return segs.length ? segs.map((sg) => ({ ...it, text: sg.text, role: sg.role })) : [it];
+  });
 }

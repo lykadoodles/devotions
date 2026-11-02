@@ -876,20 +876,26 @@ async function currentVoiceName(key) {
   const i = list.findIndex((v) => v.voiceURI === want || v.name === want);
   return i >= 0 ? `Voice ${i + 1}` : 'Phone default';
 }
-async function openVoicePicker(key) {
+const ROLES = [['narrator', 'Narrator'], ['male', 'Men'], ['female', 'Women'], ['god', 'God']];
+async function openVoicePicker(key, role = 'narrator') {
   const list = (await Audio.voicesFor(key)).slice(0, 30);
   const o = document.createElement('div');
   o.className = 'overlay sheet-overlay';
-  const want = state.voices?.[key] || '';
   const render = () => {
-    const cur = state.voices?.[key] || '';
-    o.innerHTML = `<div class="sheet voice-sheet" role="dialog" aria-label="Choose a voice">
+    const cur = Audio.voiceIdFor(key, role);
+    const auto = role === 'narrator'
+      ? { title: 'Phone default', sub: 'Whatever your phone uses' }
+      : { title: 'Automatic', sub: role === 'god' ? 'Narrator voice, deeper and slower' : role === 'male' ? 'Narrator voice, lower' : 'Narrator voice, higher' };
+    o.innerHTML = `<div class="sheet voice-sheet" role="dialog" aria-label="Choose voices">
       <div class="sheet-grip"></div>
-      <div class="eyebrow">${key === 'fil' ? 'Tagalog and Cebuano voice' : 'English voice'}</div>
-      <p class="muted" style="margin:6px 0 10px;font-size:13px">Tap ▶ to hear each one, then choose the voice you like. Phones include both male and female voices.</p>
+      <div class="eyebrow">${key === 'fil' ? 'Tagalog and Cebuano voices' : 'English voices'}</div>
+      ${Audio.dramaOn() ? `<div class="seg-ctl role-tabs">${ROLES.map(([r, l]) => `<button class="${r === role ? 'on' : ''}" data-role="${r}">${l}</button>`).join('')}</div>` : ''}
+      <p class="muted" style="margin:8px 0 10px;font-size:13px">${role === 'narrator'
+        ? 'The voice that reads the Bible text. Tap ▶ to hear each one.'
+        : `The voice for ${role === 'god' ? 'God’s words' : role === 'male' ? 'men’s lines (Moses, David, Jesus…)' : 'women’s lines (Ruth, Mary, Hannah…)'} in dramatized reading.`}</p>
       <div class="voice-list">
-        <div class="voice-row ${!cur ? 'on' : ''}"><button class="voice-pick" data-voice=""><span class="radio"></span><span><b>Phone default</b><small>Whatever your phone uses</small></span></button>
-          <button class="icon-btn voice-play" data-play="" aria-label="Preview phone default">${icon('play')}</button></div>
+        <div class="voice-row ${!cur ? 'on' : ''}"><button class="voice-pick" data-voice=""><span class="radio"></span><span><b>${auto.title}</b><small>${auto.sub}</small></span></button>
+          <button class="icon-btn voice-play" data-play="" aria-label="Preview">${icon('play')}</button></div>
         ${list.map((v, i) => { const L = voiceLabel(v, i); const id = v.voiceURI || v.name; return `
         <div class="voice-row ${cur === id ? 'on' : ''}"><button class="voice-pick" data-voice="${esc(id)}"><span class="radio"></span><span><b>${L.title}</b><small>${esc(L.sub)}</small></span></button>
           <button class="icon-btn voice-play" data-play="${esc(id)}" aria-label="Preview ${L.title}">${icon('play')}</button></div>`; }).join('')}
@@ -904,12 +910,13 @@ async function openVoicePicker(key) {
   const byId = (id) => list.find((v) => (v.voiceURI || v.name) === id) || null;
   o.addEventListener('click', (e) => {
     if (e.target === o || e.target.closest('[data-done]')) { Audio.hushNow(); o.remove(); if (location.hash.includes('settings')) route(); return; }
+    const rt = e.target.closest('[data-role]');
+    if (rt) { role = rt.dataset.role; render(); return; }
     const pl = e.target.closest('[data-play]');
-    if (pl) { Audio.preview(byId(pl.dataset.play), key); return; }
+    if (pl) { Audio.preview(byId(pl.dataset.play), key, role); return; }
     const pk = e.target.closest('[data-voice]');
-    if (pk) { const v = byId(pk.dataset.voice); Audio.setVoice(key, v); haptic(); render(); Audio.preview(v, key); }
+    if (pk) { const v = byId(pk.dataset.voice); Audio.setVoice(key, v, role); haptic(); render(); Audio.preview(v, key, role); }
   });
-  return want;
 }
 
 async function fillVoiceNames() {
@@ -934,6 +941,8 @@ function openReadingSheet() {
         <div class="seg-ctl"><button class="${state.readFont !== 'sans' ? 'on' : ''}" data-rf="serif" style="font-family:var(--serif)">Serif</button><button class="${state.readFont === 'sans' ? 'on' : ''}" data-rf="sans">Sans</button></div></div>
       ${Audio.available() ? `<div class="sheet-row"><span class="eyebrow">Read-aloud voice</span>
         <button class="btn small" data-voicepick="${Audio.langKey(TRANSLATIONS[currentTranslation()]?.lang || 'en')}">Choose</button></div>` : ''}
+      ${Audio.available() ? `<div class="sheet-row"><span class="eyebrow">Dramatized voices</span>
+        <button class="switch ${Audio.dramaOn() ? 'on' : ''}" data-action="drama-toggle" aria-label="Dramatized voices"></button></div>` : ''}
       <div class="sheet-row"><span class="eyebrow">Soft piano</span>
         <button class="switch ${music.isPlaying() ? 'on' : ''}" data-action="music" aria-label="Soft piano"></button></div>
       <div class="sheet-row"><span class="eyebrow">Page</span>
@@ -947,7 +956,7 @@ function openReadingSheet() {
   const close = () => { o.remove(); if (changedTr) route(); };
   o.addEventListener('click', (e) => {
     if (e.target === o || e.target.closest('[data-done]')) return close();
-    if (e.target.closest('[data-action=music]')) { setTimeout(render, 120); return; }
+    if (e.target.closest('[data-action=music]') || e.target.closest('[data-action=drama-toggle]')) { setTimeout(render, 120); return; }
     const vp = e.target.closest('[data-voicepick]');
     if (vp) { openVoicePicker(vp.dataset.voicepick); return; }
     const tr = e.target.closest('[data-tr]');
@@ -1205,8 +1214,10 @@ function viewSettings() {
       <div class="list">
         <div class="item"><div class="t"><b>English</b><span id="voice-en">…</span></div><button class="btn small" data-voicepick="en">Choose</button></div>
         <div class="item"><div class="t"><b>Tagalog and Cebuano</b><span id="voice-fil">…</span></div><button class="btn small" data-voicepick="fil">Choose</button></div>
+        <div class="item"><div class="t"><b>Dramatized voices <span class="beta">beta</span></b><span>Different voices for narrator, men, women and God</span></div>
+          <button class="switch ${Audio.dramaOn() ? 'on' : ''}" data-action="drama-toggle" aria-label="Dramatized voices"></button></div>
       </div>
-      <p class="help">Pick a male or female voice, with a preview of each. Speed is set in the player.</p>
+      <p class="help">Choose each voice with a preview. In dramatized reading, Lamp guesses who is speaking from the words around each quote; when it isn't sure, the narrator reads it. Speed is set in the player.</p>
     </div>` : ''}
 
     <div class="section">
@@ -1427,7 +1438,7 @@ async function listenHere() {
   if (Audio.isActive() && Audio.snapshot().queue.some((q) => samePortion(q.portion, here))) { Audio.toggle(); return; }
   const r = readingFor(here.track, here.key);
   const portion = { ...here, label: label(r.range), intro: `${TRACK_SPOKEN[readerTr]?.[here.track] || TRACKS[here.track].name}.` };
-  const items = Audio.itemsFrom(root, portion);
+  const items = Audio.itemsFrom(root, portion, readerTr);
   let start = 0;
   if (scrollY > 150) {
     const first = [...root.querySelectorAll('span.v')].find((x) => x.getBoundingClientRect().top > 70);
@@ -1449,7 +1460,7 @@ async function listenDay(date) {
     try { res = await passage(r.range); } catch { continue; }
     const box = document.createElement('div'); box.innerHTML = res.html;
     tagVerses(box, r.range);
-    items.push(...Audio.itemsFrom(box, { track: r.track, key: r.key, label: label(r.range), intro: `${TRACK_SPOKEN[res.translation]?.[r.track] || TRACKS[r.track].name}.` }));
+    items.push(...Audio.itemsFrom(box, { track: r.track, key: r.key, label: label(r.range), intro: `${TRACK_SPOKEN[res.translation]?.[r.track] || TRACKS[r.track].name}.` }, res.translation));
   }
   if (!items.length) { toast('Couldn’t load the reading'); return; }
   await Audio.stop();
@@ -1716,6 +1727,13 @@ document.addEventListener('click', async (e) => {
         setTimeout(() => celebrate(checkBadges(), day), 450);
       }
     }
+  }
+  if (a === 'drama-toggle') {
+    state.drama = !Audio.dramaOn(); save(); haptic();
+    toast(state.drama ? 'Dramatized voices on' : 'Dramatized voices off');
+    if (Audio.isActive()) Audio.stop();
+    if (location.hash.includes('settings')) route();
+    return;
   }
   if (a === 'listen') { listenHere(); return; }
   if (a === 'listen-today') { listenDay(el.dataset.date || today()); return; }
