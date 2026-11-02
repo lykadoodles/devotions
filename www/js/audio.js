@@ -4,6 +4,9 @@
 // Each speak() call resolves when its item finishes, which drives the
 // follow-along highlight whenever the app is in front.
 import { state, save } from './store.js';
+import { TRANSLATIONS } from './text.js';
+// Voice language follows the translation (Filipino voice for Tagalog/Cebuano)
+const lang = () => TRANSLATIONS[state.translation]?.lang || 'en-US';
 
 const native = () => window.Capacitor?.Plugins?.TextToSpeech;
 const web = () => window.speechSynthesis;
@@ -23,10 +26,10 @@ export const rate = () => (RATES.includes(state.audioRate) ? state.audioRate : 1
 
 function speak(text, g) {
   const n = native();
-  if (n) return n.speak({ text, lang: 'en-US', rate: rate(), pitch: 1, volume: 1, category: 'playback', queueStrategy: 1 });
+  if (n) return n.speak({ text, lang: lang(), rate: rate(), pitch: 1, volume: 1, category: 'playback', queueStrategy: 1 });
   return new Promise((resolve, reject) => {
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US'; u.rate = rate();
+    u.lang = lang(); u.rate = rate();
     u.onend = () => resolve(); u.onerror = (e) => (e.error === 'interrupted' || e.error === 'canceled' ? resolve() : reject(e));
     if (g === gen) web().speak(u);
   });

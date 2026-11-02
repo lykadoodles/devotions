@@ -69,9 +69,9 @@ BEAUTIFUL AND PRIVATE
 • Works offline: upcoming readings are saved on your phone
 • No account, no ads, no tracking. Your progress stays on your phone.
 
-FIVE TRANSLATIONS
-• Switch anytime: NLT, ESV, Berean Standard Bible (BSB), King James Version (KJV) and World English Bible (WEB)
-• BSB, KJV and WEB are built in and work fully offline
+SEVEN TRANSLATIONS, INCLUDING TAGALOG AND CEBUANO
+• Switch anytime: NLT, ESV, Berean Standard Bible (BSB), King James Version (KJV), World English Bible (WEB), Banal na Bibliya (Tagalog) and Balaan nga Bibliya (Cebuano)
+• BSB, KJV, WEB, Tagalog and Cebuano are built in and work fully offline
 
 **App icon**: `icon-512.png`
 **Feature graphic**: `feature-graphic-1024x500.png`

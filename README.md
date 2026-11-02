@@ -35,6 +35,10 @@ Readers can switch anytime from the reader's translation chip or Settings:
 | **BSB** | built in (public domain, CC0) | ✓ |
 | **KJV** | built in (public domain) | ✓ |
 | **WEB** | built in (public domain) | ✓ |
+| **TGL** · Banal na Bibliya | built in (Tagalog ULB, CC BY-SA 4.0, Door43) | ✓ |
+| **CEB** · Balaan nga Bibliya | built in (Cebuano ULB, CC BY-SA 4.0, Door43) | ✓ |
+
+Tagalog and Cebuano come from Door43's Unlocked Literal Bibles via [BibleCorps](https://github.com/BibleCorps/FIL-B-ULB2019-cc) ([Cebuano](https://github.com/BibleCorps/CEB-B-ULB2019-CC-PSFM)); rebuild with `node scripts/build-ulb.mjs /tmp/ulb && node scripts/build-translations.mjs /tmp/ulb TGL CEB`. The text is unchanged and shared under CC BY-SA 4.0.
 
 BSB and KJV come from [scrollmapper/bible_databases](https://github.com/scrollmapper/bible_databases); rebuild with `node scripts/build-translations.mjs <dir with BSB.json, KJV.json>`.
 

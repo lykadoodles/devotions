@@ -499,7 +499,7 @@ body { background: var(--page-bg); background-attachment: fixed; }
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); animation: sheetUp .32s cubic-bezier(.2,.9,.3,1); }
 @keyframes sheetUp { from { transform: translateY(100%); } }
 .sheet-grip { width: 40px; height: 5px; border-radius: 99px; background: var(--line); margin: 0 auto 14px; }
-.tr-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 10px 0 16px; }
+.tr-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0 16px; }
 .tr-opt { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 2px 8px; border-radius: 14px;
   background: var(--surface); border: 1px solid var(--line); min-height: 76px; }
 .tr-opt b { font-size: 15px; font-weight: 800; }

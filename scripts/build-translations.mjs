@@ -1,6 +1,7 @@
 // Builds offline BSB and KJV text (both public domain) in the app's compact
 // format, borrowing paragraph and poetry layout from the WEB data.
-// Usage: node scripts/build-translations.mjs <dir with BSB.json and KJV.json>
+// Usage: node scripts/build-translations.mjs <dir with BSB.json and KJV.json> [CODES…]
+// Also used for Tagalog/Cebuano: node scripts/build-ulb.mjs … then pass TGL CEB.
 // Source: https://github.com/scrollmapper/bible_databases (formats/json)
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,7 +9,8 @@ import path from 'node:path';
 const SRC = process.argv[2];
 const meta = JSON.parse(fs.readFileSync('www/data/meta.json', 'utf8'));
 
-for (const code of ['BSB', 'KJV']) {
+const CODES = process.argv.slice(3).length ? process.argv.slice(3) : ['BSB', 'KJV'];
+for (const code of CODES) {
   const src = JSON.parse(fs.readFileSync(path.join(SRC, `${code}.json`), 'utf8'));
   const outDir = `www/data/${code.toLowerCase()}`;
   fs.mkdirSync(outDir, { recursive: true });

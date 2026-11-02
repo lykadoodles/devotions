@@ -17,8 +17,10 @@ export const TRANSLATIONS = {
   BSB: { name: 'Berean Standard Bible', short: 'BSB', online: false, desc: 'Modern and accurate · offline' },
   KJV: { name: 'King James Version', short: 'KJV', online: false, desc: 'Classic 1769 English · offline' },
   WEB: { name: 'World English Bible', short: 'WEB', online: false, desc: 'Modern, public domain · offline' },
+  TGL: { name: 'Banal na Bibliya', short: 'TGL', online: false, desc: 'Tagalog, modern · offline', lang: 'fil-PH' },
+  CEB: { name: 'Balaan nga Bibliya', short: 'CEB', online: false, desc: 'Cebuano, modern · offline', lang: 'fil-PH' },
 };
-export const TRANSLATION_ORDER = ['NLT', 'ESV', 'BSB', 'KJV', 'WEB'];
+export const TRANSLATION_ORDER = ['NLT', 'ESV', 'BSB', 'KJV', 'WEB', 'TGL', 'CEB'];
 const FALLBACK = 'BSB'; // used when an online translation is unavailable
 
 // The user's own key (Settings) wins; otherwise a key built into the app.
@@ -37,6 +39,8 @@ export const NOTICES = {
   BSB: 'The Holy Bible, Berean Standard Bible, BSB. Public domain. berean.bible',
   KJV: 'King James Version (1769). Public domain.',
   WEB: 'World English Bible (WEB). Public domain.',
+  TGL: 'Banal na Bibliya (Tagalog Unlocked Literal Bible) © 2018 Door43 World Missions Community. Licensed under CC BY-SA 4.0 (creativecommons.org/licenses/by-sa/4.0). Text unchanged; formatted for this app.',
+  CEB: 'Balaan nga Bibliya (Cebuano Unlocked Literal Bible) © 2019 Door43 World Missions Community. Licensed under CC BY-SA 4.0 (creativecommons.org/licenses/by-sa/4.0). Text unchanged; formatted for this app.',
 };
 // kept for older imports
 export const NLT_NOTICE = NOTICES.NLT;
