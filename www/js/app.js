@@ -13,6 +13,7 @@ import * as PL from './prayerlist.js';
 import * as J from './journal.js';
 import * as Backup from './backup.js';
 import * as Audio from './audio.js';
+import * as Planner from './planner.js';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1407,12 +1408,24 @@ function viewSettings() {
     </div>
 
     <div class="section">
+      <div class="section-head"><div class="h2">Weekly planner</div></div>
+      <div class="list">
+        <div class="item"><div class="t"><b>Show the planner</b><span>Week at a glance, with each day’s readings</span></div>
+          <button class="switch ${Planner.enabled() ? 'on' : ''}" data-action="planner-toggle" aria-label="Toggle weekly planner"></button></div>
+        ${Planner.enabled() ? `<div class="item"><div class="t"><b>Hours</b><span>Rows shown in the week grid</span></div>
+          <select id="pl-from">${range(4, 12).map((h) => `<option value="${h}" ${state.planner.from === h ? 'selected' : ''}>${h === 12 ? '12 nn' : `${h} am`}</option>`).join('')}</select>
+          <select id="pl-to">${range(15, 23).map((h) => `<option value="${h}" ${state.planner.to === h ? 'selected' : ''}>${h - 12} pm</option>`).join('')}</select></div>` : ''}
+      </div>
+      <p class="help">Weeks start on Monday. Each day’s column shows your Lamp readings, ticked off as you read. To-dos, time blocks and weekly goals stay on this phone and are included in your backup.</p>
+    </div>
+
+    <div class="section">
       <div class="section-head"><div class="h2">Backup</div></div>
       <div class="list">
         <div class="item"><div class="t"><b>Back up to a file</b><span>${state.lastBackup ? `Last backup ${esc(fmtDate(state.lastBackup.slice(0, 10), { month: 'short', day: 'numeric', year: 'numeric' }))}` : 'No backup yet'}</span></div><button class="btn small" data-action="export">Back up</button></div>
         <div class="item"><div class="t"><b>Restore from a file</b><span>Choose a Lamp backup (.json)</span></div><button class="btn small" data-action="import">Restore</button></div>
       </div>
-      <p class="help">Saves your readings, streaks, badges, highlights, heart notes, reactions and prayer list in one file. Keep it in Google Drive or send it to yourself, so you can restore it on a new phone. API keys are not included.</p>
+      <p class="help">Saves your readings, streaks, badges, highlights, heart notes, reactions, prayer list and planner in one file. Keep it in Google Drive or send it to yourself, so you can restore it on a new phone. API keys are not included.</p>
     </div>
 
     <div class="section">
@@ -1668,7 +1681,9 @@ function routeView(same) {
   }
   renderPlayer();
   selected.clear(); document.getElementById('vbar')?.remove();
-  $app.classList.remove('reader-mode'); applyTheme();
+  $app.classList.remove('reader-mode', 'planner-mode'); applyTheme();
+  const plTab = $tabs.querySelector('[data-tab=planner]');
+  if (plTab) plTab.hidden = !Planner.enabled();
   if (!state.onboarded) return viewWelcome();
   const [, view, a, b, c] = (location.hash || '#/today').split('/');
   const isDate = (x) => /^\d{4}-\d{2}-\d{2}$/.test(x || '');
@@ -1683,6 +1698,7 @@ function routeView(same) {
   if (view === 'bible') return b ? viewFreeReader(+a, +b, +c || 0) : a ? viewBibleBook(+a) : viewBible();
   if (reader) return viewReader(a, b);
   if (view === 'journey') return viewJourney();
+  if (view === 'planner') { if (!Planner.enabled()) { location.replace('#/today'); return; } return Planner.render(a); }
   if (view === 'settings') { viewSettings(); fillSavedNote(); fillVoiceNames(); return; }
   if (view === 'catchup') return viewCatchup();
   if (view === 'prayer') return viewPrayerList();
@@ -1921,6 +1937,12 @@ document.addEventListener('click', async (e) => {
   if (a === 'ap-rate') { const R = Audio.RATES; Audio.setRate(R[(R.indexOf(Audio.rate()) + 1) % R.length]); toast(`Reading speed ${Audio.rate()}×`); return; }
   if (a === 'ap-close') { Audio.stop(); return; }
   if (a === 'rhema-notif') { toggleRhemaNotif(); return; }
+  if (a === 'planner-toggle') {
+    state.planner ||= Planner.DEFAULT_PLANNER();
+    state.planner.on = !state.planner.on; save(); haptic();
+    toast(state.planner.on ? 'Planner added to your tabs' : 'Planner hidden. Your plans are kept');
+    route(); return;
+  }
   if (a === 'rhema-new') {
     const idx = randomIndex(currentRhemaIndex());
     state.rhema = { date: today(), idx }; save(); haptic();
@@ -1992,7 +2014,7 @@ document.addEventListener('click', async (e) => {
       <div class="eyebrow">Restore backup</div>
       <div class="h1">${m.name ? `${esc(m.name)}’s Lamp` : 'Lamp backup'}</div>
       <p class="muted" style="margin:4px 0 12px">${when ? `Saved ${esc(when)} · ` : ''}plan started ${esc(fmtDate(m.startDate, { month: 'short', day: 'numeric', year: 'numeric' }))}</p>
-      <ul class="restore-sum">${row(m.readings, 'reading')}${row(m.fullDays, 'full day')}${row(m.highlights, 'highlighted verse')}${row(m.notes, 'heart note')}${row(m.reactions, 'reaction')}${row(m.prayers, 'prayer request')}</ul>
+      <ul class="restore-sum">${row(m.readings, 'reading')}${row(m.fullDays, 'full day')}${row(m.highlights, 'highlighted verse')}${row(m.notes, 'heart note')}${row(m.reactions, 'reaction')}${row(m.prayers, 'prayer request')}${row(m.plans, 'planner item')}${row(m.goals, 'weekly goal')}</ul>
       <p style="margin:12px 0 16px">This replaces everything currently in Lamp on this phone.</p>
       <button class="btn primary block" data-action="restore-confirm">Restore</button>
       <button class="btn block" data-close style="margin-top:8px">Cancel</button>`);
@@ -2044,6 +2066,7 @@ document.addEventListener('change', (e) => {
   if (id === 'rvtime') { state.rhemaNotif.time = e.target.value || '07:00'; save(); scheduleReminders(); toast('Verse time saved'); }
   if (id === 'rtime') { state.reminder.time = e.target.value || '06:00'; save(); scheduleReminders(); toast('Reminder time saved'); }
   if (id === 'name') { state.name = e.target.value.trim(); save(); }
+  if (id === 'pl-from' || id === 'pl-to') { state.planner[id === 'pl-from' ? 'from' : 'to'] = Number(e.target.value); save(); }
   if (id === 'start' && e.target.value) {
     state.startDate = e.target.value; save(); scheduleReminders(); toast(`Plan starts ${fmtDate(state.startDate, { month: 'short', day: 'numeric', year: 'numeric' })}`);
   }
@@ -2066,6 +2089,7 @@ document.addEventListener('visibilitychange', () => {
 (async function init() {
   await Promise.all([load(), loadPlan()]);
   countOpen();
+  Planner.init({ app: $app, toast });
   applyTheme();
   route();
   scheduleReminders();
