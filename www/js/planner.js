@@ -8,7 +8,8 @@
 // has a UUID, an updatedAt timestamp, and is soft-deleted (deleted: true)
 // rather than removed, so two copies can be merged without losing edits.
 import { state, save, isDone, isLit, DEFAULT_PLANNER } from './store.js';
-import { META, today, addDays, parseISO, iso, fmtDate, readingsFor, segments, TRACKS } from './plan.js';
+import { META, today, addDays, parseISO, iso, fmtDate, readingsFor, segments, TRACKS, label } from './plan.js';
+import { verseText, verseTextIn } from './text.js';
 
 // ---------- data ----------
 export { DEFAULT_PLANNER };
@@ -17,6 +18,7 @@ const P = () => {
   state.planner ||= DEFAULT_PLANNER();
   state.planner.items ||= [];
   state.planner.goals ||= [];
+  state.planner.birthdays ||= [];
   return state.planner;
 };
 export const enabled = () => !!state.planner?.on;
@@ -119,9 +121,16 @@ let toast = () => {};
 let shownWeek = null;
 let placing = null; // id of the to-do waiting for a time slot
 
-export function init(deps) { $app = deps.app; toast = deps.toast || toast; }
+const hooks = { changed: () => {}, askNotif: null };
+export function init(deps) { $app = deps.app; toast = deps.toast || toast; hooks.changed = deps.onChange || hooks.changed; hooks.askNotif = deps.askNotif || null; }
 
-export function render(weekParam) {
+export function render(weekParam, openId) {
+  if (weekParam === 'bday') {
+    history.replaceState(null, '', '#/planner');
+    render(null);
+    if (openId) setTimeout(() => greetSheet(openId, today()), 200);
+    return;
+  }
   const curWeek = mondayOf(today());
   const week = weekParam && /^\d{4}-\d{2}-\d{2}$/.test(weekParam) ? mondayOf(weekParam) : curWeek;
   if (week !== shownWeek) placing = null;
@@ -155,6 +164,7 @@ export function render(weekParam) {
         <span>${dt.toLocaleDateString(undefined, { weekday: 'short' })}</span>
         <b>${dt.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()} ${dt.getDate()}</b>
       </a>
+      ${birthdaysOn(d).map((b) => `<button class="pl-bday ${greetedIn(b, dt.getFullYear()) ? 'done' : ''}" data-pl="bday" data-id="${b.id}" data-date="${d}">🎂 <span>${esc(b.name)}</span></button>`).join('')}
       <div class="pl-ticks">${rs.map((r) => `<a class="pl-tick t-${r.track} ${isDone(r.track, r.key) ? 'done' : ''}" href="#/read/${r.track}/${r.key}" title="${esc(TRACKS[r.track].name)}"><i></i><span>${esc(shortLabel(r.range))}</span></a>`).join('')}</div>
       ${extra ? `<div class="pl-extra">+${extra} caught up</div>` : ''}
     </div>`;
@@ -216,6 +226,8 @@ export function render(weekParam) {
           <label>Results / remarks<textarea rows="2" data-plf="result" data-id="${g.id}" placeholder="${review ? 'How did it go?' : 'Fill this in at the end of the week'}" maxlength="400">${esc(g.result)}</textarea></label>
         </div>`).join('')}</div>` : `<p class="help" style="text-align:center;margin:14px 0">Set a few goals for the week, each with its next action and a deadline.</p>`}
     </div>
+
+    ${birthdaySection()}
 
     <p class="help" style="text-align:center;margin-top:28px">Proverbs 16:3 · “Commit your work to the Lord, and your plans will succeed.”</p>
     ${placing ? placingBar() : ''}
@@ -336,6 +348,9 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (a === 'item') { itemSheet(id); return; }
+  if (a === 'bday') { greetSheet(id, el.dataset.date); return; }
+  if (a === 'bday-add') { birthdaySheet(null); return; }
+  if (a === 'bday-edit') { birthdaySheet(id); return; }
   if (a === 'done') { const it = itemById(id); updateItem(id, { done: !it.done }); rerender(); return; }
   if (a === 'place') { if (placing === id) { placing = null; rerender(); } else startPlacing(id); return; }
   if (a === 'place-cancel') { placing = null; rerender(); return; }
@@ -372,3 +387,248 @@ document.addEventListener('input', (e) => {
 let saveTimer = 0;
 // Make sure a half-typed goal is saved if the app goes to the background
 document.addEventListener('visibilitychange', () => { if (saveTimer) { clearTimeout(saveTimer); saveTimer = 0; save(); } });
+
+
+// ---------- birthdays ----------
+// Each birthday becomes a greeting on the day: a ready message with the
+// person's name and a blessing verse, to copy or share. The verse and message
+// rotate per person each year, so nobody gets the same one twice in a row.
+const BLESSINGS = [
+  [[3, 6, 24], [3, 6, 26]], // Numbers 6:24–26
+  [[23, 29, 11], [23, 29, 11]], // Jeremiah 29:11
+  [[18, 118, 24], [18, 118, 24]], // Psalm 118:24
+  [[35, 3, 17], [35, 3, 17]], // Zephaniah 3:17
+  [[24, 3, 22], [24, 3, 23]], // Lamentations 3:22–23
+  [[18, 90, 12], [18, 90, 12]], // Psalm 90:12
+  [[18, 139, 14], [18, 139, 14]], // Psalm 139:14
+  [[19, 3, 5], [19, 3, 6]], // Proverbs 3:5–6
+  [[49, 1, 6], [49, 1, 6]], // Philippians 1:6
+  [[22, 40, 31], [22, 40, 31]], // Isaiah 40:31
+  [[18, 20, 4], [18, 20, 4]], // Psalm 20:4
+  [[63, 1, 2], [63, 1, 2]], // 3 John 2
+  [[18, 16, 11], [18, 16, 11]], // Psalm 16:11
+  [[48, 3, 20], [48, 3, 20]], // Ephesians 3:20
+];
+const MESSAGES = {
+  en: [
+    'Happy birthday, {name}! 🎂 Thanking God for you today and praying this new year of your life is full of His goodness.',
+    'Happy, happy birthday, {name}! 🥳 May this year bring you closer to Jesus and fill your days with joy, peace and answered prayers.',
+    '{name}, happy birthday! 🎉 I’m so grateful God put you in my life. Praying His blessings over you this year.',
+    'Happy birthday, {name}! 🎈 May the Lord surprise you with His kindness in big and small ways this year.',
+  ],
+  enAge: 'Happy {age} birthday, {name}! 🎂 Celebrating God’s faithfulness in your life and praying this year is your most blessed one yet.',
+  fil: [
+    'Maligayang kaarawan, {name}! 🎂 Salamat sa Diyos sa buhay mo. Ipinagdarasal ko na punuin ka Niya ng kagalakan at kapayapaan ngayong taon.',
+    'Happy birthday, {name}! 🥳 Nawa’y pagpalain ka pa ng Panginoon at ingatan ka Niya sa bawat araw ng bagong taon ng buhay mo.',
+    'Maligayang kaarawan, {name}! 🎉 Isa kang malaking biyaya sa buhay ko. Patuloy kang gabayan at pagpalain ng Diyos.',
+    'Happy birthday, {name}! 🎈 Ipinagpapasalamat ko sa Diyos ang buhay mo. Nawa’y mapuno ng Kanyang pag-ibig ang taon mo.',
+  ],
+  filAge: 'Maligayang ika-{n} kaarawan, {name}! 🎂 Salamat sa Diyos sa {n} taon ng Kanyang katapatan sa buhay mo. Pagpalain ka pa Niya!',
+};
+const MONTHS = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleDateString(undefined, { month: 'long' }));
+const ordinal = (n) => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+const hash = (str) => { let h = 7; for (const c of str) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
+
+const bdays = () => live(P().birthdays);
+const bdayById = (id) => P().birthdays.find((x) => x.id === id);
+
+// The birthday's date in a given year (Feb 29 → Feb 28 outside leap years)
+function bdayDate(b, year) {
+  const len = new Date(year, b.month, 0).getDate();
+  const day = Math.min(b.day, len);
+  return `${year}-${String(b.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+export const birthdaysOn = (date) => { const y = parseISO(date).getFullYear(); return bdays().filter((b) => bdayDate(b, y) === date); };
+const yearRec = (b, y) => ((b.years ||= {})[y] ||= {});
+const greetedIn = (b, y) => !!b.years?.[y]?.greeted;
+const ageIn = (b, y) => (b.year ? y - b.year : null);
+function nextOccurrence(b, from = today()) {
+  const y = parseISO(from).getFullYear();
+  const d = bdayDate(b, y);
+  return d >= from ? d : bdayDate(b, y + 1);
+}
+const daysUntil = (d) => Math.round((parseISO(d) - parseISO(today())) / 864e5);
+
+function upsertBirthday(id, fields) {
+  if (id) { const b = bdayById(id); return b ? touch(b, fields) : null; }
+  const t = now();
+  const b = { id: uid(), name: '', month: 1, day: 1, year: null, lang: 'en', years: {}, createdAt: t, updatedAt: t, deleted: false, ...fields };
+  P().birthdays.push(b); save();
+  return b;
+}
+
+function pickMessage(b, y) {
+  const r = yearRec(b, y);
+  if (r.msg) return r.msg;
+  const lang = b.lang === 'fil' ? 'fil' : 'en';
+  const age = ageIn(b, y);
+  const list = MESSAGES[lang];
+  const i = (hash(b.id) + y + (r.mOff || 0)) % (list.length + (age > 0 ? 1 : 0));
+  const tpl = i === list.length ? MESSAGES[`${lang}Age`] : list[i];
+  return tpl.replace(/\{name\}/g, b.name).replace(/\{age\}/g, age > 0 ? ordinal(age) : '').replace(/\{n\}/g, age);
+}
+const pickVerse = (b, y) => BLESSINGS[(hash(b.id) + y + (yearRec(b, y).vOff || 0)) % BLESSINGS.length];
+
+async function verseFor(b, y) {
+  const range = pickVerse(b, y);
+  try {
+    const res = b.lang === 'fil' ? await verseTextIn(range, 'TGL') : await verseText(range);
+    // Drop speech marks at the ends (the greeting adds its own quotes)
+    const text = (res.text || '').replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, '');
+    return { ...res, text, ref: label(range) };
+  } catch { return { text: '', translation: '', ref: label(range) }; }
+}
+const composeText = (msg, note, v) => [msg.trim(), note?.trim(), v.text ? `“${v.text}”\n${v.ref}` : v.ref].filter(Boolean).join('\n\n');
+
+// For the Today screen
+export function todayBanner() {
+  if (!enabled()) return '';
+  const t = today(), y = parseISO(t).getFullYear();
+  const list = birthdaysOn(t).filter((b) => !greetedIn(b, y));
+  if (!list.length) return '';
+  const names = list.map((b) => esc(b.name));
+  const who = names.length > 2 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names.join(' and ');
+  return `<a class="banner rise pl-bday-banner" href="#/planner/bday/${list[0].id}">
+    <div class="pl-cake">🎂</div>
+    <div class="t"><b>It’s ${who}’s birthday today</b><span class="muted">Your greeting and verse are ready to send</span></div>
+  </a>`;
+}
+
+// Notifications for upcoming birthdays (the app schedules them)
+export function birthdayNotifications(days = 30) {
+  if (!enabled() || P().bdayNotif === false) return [];
+  const out = [];
+  for (const b of bdays()) {
+    const d = nextOccurrence(b);
+    if (daysUntil(d) > days || greetedIn(b, parseISO(d).getFullYear())) continue;
+    out.push({ date: d, id: b.id, title: `🎂 ${b.name}’s birthday today`, body: 'Your greeting and a blessing verse are ready to send.' });
+  }
+  return out;
+}
+
+function birthdaySection() {
+  const list = bdays().map((b) => ({ b, d: nextOccurrence(b) })).sort((x, y) => x.d.localeCompare(y.d));
+  const when = (d) => { const n = daysUntil(d); return n === 0 ? '<b class="pl-today-tag">Today</b>' : n === 1 ? 'Tomorrow' : n < 7 ? `In ${n} days` : esc(fmtDate(d, { month: 'short', day: 'numeric' })); };
+  return `<div class="section">
+      <div class="section-head"><div class="h2">Birthdays</div>
+        <button class="pc-btn" data-pl="bday-add">${ico(I.plus)}<span>Add</span></button></div>
+      ${list.length ? `<div class="list">${list.map(({ b, d }) => {
+    const y = parseISO(d).getFullYear(), age = ageIn(b, y), done = greetedIn(b, y);
+    return `<div class="item pl-bday-row">
+          <button class="t" data-pl="bday-edit" data-id="${b.id}" style="text-align:left"><b>🎂 ${esc(b.name)}</b><span>${when(d)}${age > 0 ? ` · turns ${age}` : ''}${b.lang === 'fil' ? ' · Tagalog' : ''}</span></button>
+          <button class="pc-btn ${done ? 'on' : ''}" data-pl="bday" data-id="${b.id}" data-date="${d}">${done ? 'Greeted ✓' : 'Greeting'}</button>
+        </div>`;
+  }).join('')}</div>` : '<p class="help" style="text-align:center;margin:14px 0">Add birthdays and Lamp will have a greeting with a verse ready on the day, to copy or share.</p>'}
+    </div>`;
+}
+
+function birthdaySheet(id) {
+  const b = id ? bdayById(id) : null;
+  const now0 = parseISO(today());
+  const m = b?.month || now0.getMonth() + 1, dd = b?.day || now0.getDate();
+  sheet(`
+    <div class="eyebrow">${b ? 'Edit birthday' : 'Add a birthday'}</div>
+    <form class="pl-bform" autocomplete="off">
+      <input class="field" id="bd-name" type="text" placeholder="Name (as you’d greet them)" maxlength="60" value="${esc(b?.name || '')}">
+      <div class="pl-brow">
+        <select class="field" id="bd-month" aria-label="Month">${MONTHS.map((n, i) => `<option value="${i + 1}" ${i + 1 === m ? 'selected' : ''}>${n}</option>`).join('')}</select>
+        <select class="field" id="bd-day" aria-label="Day">${Array.from({ length: 31 }, (_, i) => `<option ${i + 1 === dd ? 'selected' : ''}>${i + 1}</option>`).join('')}</select>
+        <input class="field" id="bd-year" type="number" inputmode="numeric" placeholder="Year" aria-label="Birth year (optional)" min="1900" max="${now0.getFullYear()}" value="${b?.year || ''}">
+      </div>
+      <p class="help" style="margin:6px 4px 0">Year is optional. With it, the greeting can say how old they’re turning.</p>
+      <div class="sheet-row"><span class="eyebrow">Greeting in</span>
+        <div class="seg-ctl" id="bd-lang"><button type="button" data-lang="en" class="${b?.lang !== 'fil' ? 'on' : ''}">English</button><button type="button" data-lang="fil" class="${b?.lang === 'fil' ? 'on' : ''}">Tagalog</button></div></div>
+      <button class="btn primary block" type="submit">${b ? 'Save' : 'Add birthday'}</button>
+      ${b ? '<button class="btn block pl-danger" type="button" data-bdel style="margin-top:8px">Delete</button>' : ''}
+    </form>`, (o, close) => {
+    let lang = b?.lang || 'en';
+    o.querySelector('#bd-lang').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-lang]'); if (!btn) return;
+      lang = btn.dataset.lang;
+      o.querySelectorAll('#bd-lang button').forEach((x) => x.classList.toggle('on', x === btn));
+    });
+    o.querySelector('[data-bdel]')?.addEventListener('click', () => {
+      if (!confirm(`Delete ${b.name}’s birthday?`)) return;
+      upsertBirthday(b.id, { deleted: true }); close(); rerender(); hooks.changed();
+    });
+    o.querySelector('form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const $n = o.querySelector('#bd-name');
+      const name = $n.value.trim();
+      if (!name) { $n.focus(); return; }
+      const yr = Number(o.querySelector('#bd-year').value);
+      const first = !bdays().length;
+      upsertBirthday(b?.id, { name, month: Number(o.querySelector('#bd-month').value), day: Number(o.querySelector('#bd-day').value),
+        year: yr >= 1900 && yr <= now0.getFullYear() ? yr : null, lang });
+      close(); rerender();
+      toast(b ? 'Birthday saved' : `${name}’s birthday added 🎂`);
+      if (first) hooks.askNotif?.();
+      hooks.changed();
+    });
+    if (!b) setTimeout(() => o.querySelector('#bd-name')?.focus(), 250);
+  });
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  const ta = Object.assign(document.createElement('textarea'), { value: text });
+  ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch {}
+  ta.remove(); return ok;
+}
+
+function greetSheet(id, date) {
+  const b = bdayById(id);
+  if (!b || b.deleted) return;
+  const y = parseISO(date).getFullYear();
+  const age = ageIn(b, y);
+  let v = { text: '', ref: label(pickVerse(b, y)), translation: '' };
+  sheet(`
+    <div class="eyebrow">🎂 ${esc(fmtDate(date, { weekday: 'long', month: 'long', day: 'numeric' }))}${age > 0 ? ` · turns ${age}` : ''}</div>
+    <div class="h1" style="font-size:24px;margin-top:4px">${esc(b.name)}’s birthday</div>
+    <textarea class="field pl-gmsg" id="bd-msg" rows="4" maxlength="600" aria-label="Message"></textarea>
+    <input class="field" id="bd-note" type="text" placeholder="Add a personal line (optional)" maxlength="200" value="${esc(yearRec(b, y).note || '')}">
+    <div class="pl-verse"><p id="bd-verse">Loading verse…</p>
+      <div class="pl-verse-foot"><span id="bd-ref">${esc(v.ref)}</span>
+      <span><button class="link-btn" data-g="msg">New message</button> · <button class="link-btn" data-g="verse">New verse</button></span></div></div>
+    <div class="pl-sheet-actions">
+      <button class="btn" data-g="copy">Copy</button>
+      <button class="btn primary" data-g="share">Share</button>
+    </div>
+    <button class="btn block" data-g="greeted" style="margin-top:8px">${greetedIn(b, y) ? 'Greeted ✓ · undo' : 'Mark as greeted'}</button>`, (o, close) => {
+    const $msg = o.querySelector('#bd-msg'), $note = o.querySelector('#bd-note');
+    const fillVerse = async () => {
+      o.querySelector('#bd-verse').textContent = 'Loading verse…';
+      v = await verseFor(b, y);
+      o.querySelector('#bd-verse').textContent = v.text ? `“${v.text}”` : 'Couldn’t load the verse text. The reference will still be included.';
+      o.querySelector('#bd-ref').textContent = `${v.ref}${v.translation ? ` · ${v.translation}` : ''}`;
+    };
+    $msg.value = pickMessage(b, y);
+    fillVerse();
+    $msg.addEventListener('input', () => { yearRec(b, y).msg = $msg.value; touch(b); });
+    $note.addEventListener('change', () => { yearRec(b, y).note = $note.value.trim(); touch(b); });
+    const greeted = () => { if (!greetedIn(b, y)) { yearRec(b, y).greeted = today(); touch(b); hooks.changed(); } };
+    o.addEventListener('click', async (e) => {
+      const g = e.target.closest('[data-g]')?.dataset.g;
+      if (!g) return;
+      const text = composeText($msg.value, $note.value, v);
+      if (g === 'msg') { const r = yearRec(b, y); delete r.msg; r.mOff = (r.mOff || 0) + 1; touch(b); $msg.value = pickMessage(b, y); return; }
+      if (g === 'verse') { const r = yearRec(b, y); r.vOff = (r.vOff || 0) + 1; touch(b); fillVerse(); return; }
+      if (g === 'copy') {
+        if (!(await copyText(text))) { toast('Couldn’t copy'); return; }
+        greeted(); toast('Copied. Paste it in your chat 🎉');
+      }
+      if (g === 'share') {
+        const Sh = window.Capacitor?.Plugins?.Share;
+        try {
+          if (Sh) await Sh.share({ title: `Happy birthday, ${b.name}!`, text, dialogTitle: `Greet ${b.name}` });
+          else if (navigator.share) await navigator.share({ text });
+          else { await copyText(text); toast('Copied'); }
+        } catch { return; }
+        greeted();
+      }
+      if (g === 'greeted') { if (greetedIn(b, y)) { delete yearRec(b, y).greeted; touch(b); hooks.changed(); } else greeted(); }
+      close(); if (onPlanner()) rerender();
+    });
+  });
+}

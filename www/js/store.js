@@ -2,7 +2,7 @@
 // storage clears) and localStorage in a plain browser.
 import { today, addDays, diffDays } from './plan.js';
 
-export const DEFAULT_PLANNER = () => ({ on: false, from: 7, to: 21, items: [], goals: [] });
+export const DEFAULT_PLANNER = () => ({ on: false, from: 7, to: 21, bdayNotif: true, items: [], goals: [], birthdays: [] });
 
 const KEY = 'lamp.state.v1';
 const prefs = () => window.Capacitor?.Plugins?.Preferences;

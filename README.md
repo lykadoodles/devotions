@@ -21,7 +21,7 @@ That's about 15 minutes a day. The OT, NT and Psalms portions are balanced by ve
 - **Journey** page: % of the Bible read, a bookshelf of 66 books that fill in as you go, a heatmap of the year, and Proverbs progress beads (12 per year)
 - **20 badges**: streaks, the Torah, the Gospels, Paul's letters, Proverbs ×12, the whole Bible…
 - **Daily reminder** notification listing that day's passages
-- **Weekly planner** (optional, turn on in Settings): a Monday-start “week at a glance” spread with an hourly grid (7 am–9 pm by default), a to-do list that carries unfinished items into the next week, and weekly goals with next action, deadline and results. Each day's column shows that day's four readings, ticked off from your Lamp progress. Planner records have UUIDs, `updatedAt` timestamps and soft deletes, so a future Google Drive sync can merge them
+- **Weekly planner** (optional, turn on in Settings): a Monday-start “week at a glance” spread with an hourly grid (7 am–9 pm by default), a to-do list that carries unfinished items into the next week, and weekly goals with next action, deadline and results. Each day's column shows that day's four readings, ticked off from your Lamp progress. Add **birthdays** and, on the day, Lamp has a greeting ready (English or Tagalog, with their name, age if you know the year, and a blessing verse that changes each year) to copy or share, plus an 8 AM reminder. Planner records have UUIDs, `updatedAt` timestamps and soft deletes, so a future Google Drive sync can merge them
 - **Backup & restore** to a .json file (share to Google Drive, Gmail, Messenger…), also from the welcome screen on a new phone
 - Dark and light themes, adjustable text size, offline reading
 
