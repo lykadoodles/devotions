@@ -120,6 +120,7 @@ let $app = null;
 let toast = () => {};
 let shownWeek = null;
 let placing = null; // id of the to-do waiting for a time slot
+let tab = 'week';   // week | todos | goals | bdays
 
 const hooks = { changed: () => {}, askNotif: null };
 export function init(deps) { $app = deps.app; toast = deps.toast || toast; hooks.changed = deps.onChange || hooks.changed; hooks.askNotif = deps.askNotif || null; }
@@ -172,18 +173,10 @@ export function render(weekParam, openId) {
 
   const entry = (x) => `<span class="pl-entry ${x.done ? 'done' : ''}" data-pl="item" data-id="${x.id}">${x.hour < from || x.hour > to ? `<small>${hourLabel(x.hour)}</small> ` : ''}${esc(x.text)}</span>`;
 
-  $app.classList.add('planner-mode');
-  $app.innerHTML = `
-    <header class="top rise">
-      <div><div class="eyebrow">Week at a glance</div><h1 class="h1">Week ${wn}</h1>
-        <p class="muted" style="margin:4px 0 0">${esc(span)}</p></div>
-      <div class="pl-weeknav">
-        <a class="pl-navbtn" href="#/planner/${addDays(week, -7)}" aria-label="Previous week">${ico(I.prev)}</a>
-        ${week !== curWeek ? `<a class="pl-navbtn now" href="#/planner">This week</a>` : ''}
-        <a class="pl-navbtn" href="#/planner/${addDays(week, 7)}" aria-label="Next week">${ico(I.next)}</a>
-      </div>
-    </header>
+  const nB = bdays().length;
+  const tabBtn = (k, label, n) => `<button class="${tab === k ? 'on' : ''}" data-pl="tab" data-tab="${k}">${label}${n ? ` <i>${n}</i>` : ''}</button>`;
 
+  const weekHTML = `
     <div class="pl-scroll rise" id="pl-scroll">
       <div class="pl-grid ${placing ? 'placing' : ''}" style="grid-template-rows:auto repeat(${hours.length}, minmax(48px, auto))">
         <div class="pl-corner"></div>
@@ -194,44 +187,58 @@ export function render(weekParam, openId) {
         `).join('')}
       </div>
     </div>
+    <p class="help" style="text-align:center">Tap an hour to add something. Swipe sideways for more days.</p>`;
 
-    <div class="section">
-      <div class="section-head"><div class="h2">To-dos</div><span class="muted" style="font-size:13px">${open ? `${open} open` : todos.length ? 'All done' : ''}</span></div>
-      <form class="padd pl-add" data-plform="todo" autocomplete="off">
-        <div class="padd-row" style="border:0;margin:0;padding:0">
-          <input id="pl-todo" type="text" placeholder="Add a to-do for this week" maxlength="140">
-          <button class="btn primary small" type="submit">Add</button>
+  const todosHTML = `
+    <form class="padd pl-add" data-plform="todo" autocomplete="off">
+      <div class="padd-row" style="border:0;margin:0;padding:0">
+        <input id="pl-todo" type="text" placeholder="Add a to-do for this week" maxlength="140">
+        <button class="btn primary small" type="submit">Add</button>
+      </div>
+    </form>
+    ${moved ? `<p class="help">${moved} unfinished to-do${moved > 1 ? 's' : ''} carried over from last week.</p>` : ''}
+    ${todos.length ? `<div class="list pl-todos">${todos.map((x) => `
+      <div class="item pl-todo ${x.done ? 'done' : ''} ${placing === x.id ? 'placing' : ''}">
+        <button class="pl-check" data-pl="done" data-id="${x.id}" aria-label="${x.done ? 'Mark not done' : 'Mark done'}">${ico(I.check)}</button>
+        <button class="t pl-todo-text" data-pl="item" data-id="${x.id}"><b>${esc(x.text)}</b>${x.carried ? `<span>${ico(I.carry, 'class="pl-mini"')} Carried over</span>` : ''}</button>
+        ${x.done ? '' : `<button class="pc-btn" data-pl="place" data-id="${x.id}" aria-label="Schedule">${ico(I.cal)}<span>Schedule</span></button>`}
+      </div>`).join('')}</div>` : `<p class="help" style="text-align:center;margin:14px 0">Nothing on your list yet. Add a to-do, then tap <b>Schedule</b> to give it a time.</p>`}`;
+
+  const goalsHTML = `
+    <button class="btn block pl-addbtn" data-pl="goal-add">${ico(I.plus)} Add a goal</button>
+    ${review && gl.some((g) => g.goal && !g.result) ? `<div class="banner pl-review"><div><b>Week in review</b><div class="muted" style="font-size:13.5px;margin-top:2px">How did your goals go? Note the results below.</div></div></div>` : ''}
+    ${gl.length ? `<div class="pl-goals">${gl.map((g, i) => `
+      <div class="pl-goal rise" data-id="${g.id}">
+        <div class="pl-goal-top"><span class="pl-num">${i + 1}</span>
+          <textarea rows="1" data-plf="goal" data-id="${g.id}" placeholder="Goal" maxlength="200">${esc(g.goal)}</textarea>
+          <button class="pl-del" data-pl="goal-del" data-id="${g.id}" aria-label="Delete goal">${ico(I.trash)}</button></div>
+        <label>Next action step<input type="text" data-plf="next" data-id="${g.id}" value="${esc(g.next)}" placeholder="The very next thing to do" maxlength="200"></label>
+        <label class="pl-due">Deadline<input type="date" data-plf="due" data-id="${g.id}" value="${esc(g.due)}"></label>
+        <label>Results / remarks<textarea rows="2" data-plf="result" data-id="${g.id}" placeholder="${review ? 'How did it go?' : 'Fill this in at the end of the week'}" maxlength="400">${esc(g.result)}</textarea></label>
+      </div>`).join('')}</div>` : `<p class="help" style="text-align:center;margin:14px 0">Set a few goals for the week, each with its next action and a deadline.</p>`}`;
+
+  $app.classList.add('planner-mode');
+  $app.innerHTML = `
+    <header class="pl-head rise">
+      <div class="pl-head-row">
+        <div><div class="eyebrow">${esc(span)}</div><h1 class="h1 pl-h1">Week ${wn}</h1></div>
+        <div class="pl-weeknav">
+          <a class="pl-navbtn" href="#/planner/${addDays(week, -7)}" aria-label="Previous week">${ico(I.prev)}</a>
+          ${week !== curWeek ? `<a class="pl-navbtn now" href="#/planner">Today</a>` : ''}
+          <a class="pl-navbtn" href="#/planner/${addDays(week, 7)}" aria-label="Next week">${ico(I.next)}</a>
         </div>
-      </form>
-      ${moved ? `<p class="help">${moved} unfinished to-do${moved > 1 ? 's' : ''} carried over from last week.</p>` : ''}
-      ${todos.length ? `<div class="list pl-todos">${todos.map((x) => `
-        <div class="item pl-todo ${x.done ? 'done' : ''} ${placing === x.id ? 'placing' : ''}">
-          <button class="pl-check" data-pl="done" data-id="${x.id}" aria-label="${x.done ? 'Mark not done' : 'Mark done'}">${ico(I.check)}</button>
-          <button class="t pl-todo-text" data-pl="item" data-id="${x.id}"><b>${esc(x.text)}</b>${x.carried ? `<span>${ico(I.carry, 'class="pl-mini"')} Carried over</span>` : ''}</button>
-          ${x.done ? '' : `<button class="pc-btn" data-pl="place" data-id="${x.id}" aria-label="Schedule">${ico(I.cal)}<span>${placing === x.id ? 'Cancel' : 'Schedule'}</span></button>`}
-        </div>`).join('')}</div>` : `<p class="help" style="text-align:center;margin:14px 0">Nothing on your list yet. Add a to-do, then tap <b>Schedule</b> to give it a time.</p>`}
+      </div>
+      <p class="pl-motto">“Commit your work to the Lord, and your plans will succeed.” <span>Proverbs 16:3 NLT</span></p>
+      <div class="seg-ctl pl-tabs" role="tablist">
+        ${tabBtn('week', 'Week')}${tabBtn('todos', 'To-dos', open)}${tabBtn('goals', 'Goals', gl.length)}${tabBtn('bdays', '<span aria-label="Birthdays">🎂</span>', nB)}
+      </div>
+    </header>
+    <div class="pl-panel">
+      ${tab === 'todos' ? todosHTML : tab === 'goals' ? goalsHTML : tab === 'bdays' ? birthdaySection() : weekHTML}
     </div>
-
-    <div class="section">
-      <div class="section-head"><div class="h2">Goals for the week</div>
-        <button class="pc-btn" data-pl="goal-add">${ico(I.plus)}<span>Add goal</span></button></div>
-      ${review && gl.some((g) => g.goal && !g.result) ? `<div class="banner pl-review"><div><b>Week in review</b><div class="muted" style="font-size:13.5px;margin-top:2px">How did your goals go? Note the results below.</div></div></div>` : ''}
-      ${gl.length ? `<div class="pl-goals">${gl.map((g, i) => `
-        <div class="pl-goal rise" data-id="${g.id}">
-          <div class="pl-goal-top"><span class="pl-num">${i + 1}</span>
-            <textarea rows="1" data-plf="goal" data-id="${g.id}" placeholder="Goal" maxlength="200">${esc(g.goal)}</textarea>
-            <button class="pl-del" data-pl="goal-del" data-id="${g.id}" aria-label="Delete goal">${ico(I.trash)}</button></div>
-          <label>Next action step<input type="text" data-plf="next" data-id="${g.id}" value="${esc(g.next)}" placeholder="The very next thing to do" maxlength="200"></label>
-          <label class="pl-due">Deadline<input type="date" data-plf="due" data-id="${g.id}" value="${esc(g.due)}"></label>
-          <label>Results / remarks<textarea rows="2" data-plf="result" data-id="${g.id}" placeholder="${review ? 'How did it go?' : 'Fill this in at the end of the week'}" maxlength="400">${esc(g.result)}</textarea></label>
-        </div>`).join('')}</div>` : `<p class="help" style="text-align:center;margin:14px 0">Set a few goals for the week, each with its next action and a deadline.</p>`}
-    </div>
-
-    ${birthdaySection()}
-
-    <p class="help" style="text-align:center;margin-top:28px">Proverbs 16:3 · “Commit your work to the Lord, and your plans will succeed.”</p>
-    ${placing ? placingBar() : ''}
+    ${placing ? placingBar() : tab === 'week' ? `<button class="pl-fab" data-pl="quick" aria-label="Add">${ico(I.plus)}</button>` : ''}
   `;
+  if (tab !== 'week') return;
   layout(week === curWeek ? days.indexOf(t) : 0);
 }
 
@@ -322,10 +329,44 @@ function itemSheet(id) {
   });
 }
 
+// The + button on the week view: add a to-do, goal or birthday without leaving the grid
+function quickSheet() {
+  sheet(`
+    <div class="eyebrow">Add to this week</div>
+    <form data-plform="quick" autocomplete="off" style="margin-top:12px">
+      <div class="padd-row" style="border:0;margin:0;padding:0;gap:8px">
+        <input class="field" id="pl-quick" type="text" placeholder="New to-do" maxlength="140" style="margin:0">
+        <button class="btn primary small" type="submit">Add</button>
+      </div>
+    </form>
+    <div class="pl-sheet-actions">
+      <button class="btn" data-q="goal">${ico(I.plus, 'width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4"')} Goal</button>
+      <button class="btn" data-q="bday">🎂 Birthday</button>
+    </div>
+    <p class="help">To add something at a set time, tap that hour in the grid.</p>`, (o, close) => {
+    o.querySelector('form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const it = addItem(o.querySelector('#pl-quick').value, shownWeek);
+      if (!it) return;
+      close(); toast('Added to your to-dos'); rerender();
+    });
+    o.addEventListener('click', (e) => {
+      const q = e.target.closest('[data-q]')?.dataset.q;
+      if (!q) return;
+      close();
+      if (q === 'bday') { birthdaySheet(null); return; }
+      tab = 'goals';
+      const g = addGoal(shownWeek); render(shownWeek); window.scrollTo(0, 0);
+      setTimeout(() => document.querySelector(`textarea[data-plf="goal"][data-id="${g.id}"]`)?.focus(), 80);
+    });
+    setTimeout(() => o.querySelector('#pl-quick')?.focus(), 250);
+  });
+}
+
 function startPlacing(id) {
   placing = id;
+  tab = 'week';
   rerender();
-  document.getElementById('pl-scroll')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ---------- events (only while the planner is on screen) ----------
@@ -347,6 +388,8 @@ document.addEventListener('click', (e) => {
     } else if (a === 'slot') newEntrySheet(s.dataset.date, Number(s.dataset.hour));
     return;
   }
+  if (a === 'tab') { tab = el.dataset.tab; placing = null; render(shownWeek); window.scrollTo(0, 0); return; }
+  if (a === 'quick') { quickSheet(); return; }
   if (a === 'item') { itemSheet(id); return; }
   if (a === 'bday') { greetSheet(id, el.dataset.date); return; }
   if (a === 'bday-add') { birthdaySheet(null); return; }
@@ -509,9 +552,8 @@ export function birthdayNotifications(days = 30) {
 function birthdaySection() {
   const list = bdays().map((b) => ({ b, d: nextOccurrence(b) })).sort((x, y) => x.d.localeCompare(y.d));
   const when = (d) => { const n = daysUntil(d); return n === 0 ? '<b class="pl-today-tag">Today</b>' : n === 1 ? 'Tomorrow' : n < 7 ? `In ${n} days` : esc(fmtDate(d, { month: 'short', day: 'numeric' })); };
-  return `<div class="section">
-      <div class="section-head"><div class="h2">Birthdays</div>
-        <button class="pc-btn" data-pl="bday-add">${ico(I.plus)}<span>Add</span></button></div>
+  return `<div>
+      <button class="btn block pl-addbtn" data-pl="bday-add">${ico(I.plus)} Add a birthday</button>
       ${list.length ? `<div class="list">${list.map(({ b, d }) => {
     const y = parseISO(d).getFullYear(), age = ageIn(b, y), done = greetedIn(b, y);
     return `<div class="item pl-bday-row">

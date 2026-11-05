@@ -853,3 +853,25 @@ body.has-player .listen-fab, body:has(#vbar) .listen-fab { display: none; }
 .pl-verse p { margin: 0; font-family: var(--serif); font-size: 15.5px; line-height: 1.5; }
 .pl-verse-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; color: var(--muted); font-weight: 700; }
 .pl-verse-foot .link-btn { font-size: 12.5px; color: var(--muted); }
+
+/* ---------- planner: compact header + tabs ---------- */
+.pl-head-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.pl-h1 { font-size: 30px; margin-top: 2px; }
+.pl-weeknav { padding-top: 2px; }
+.pl-motto { margin: 8px 0 0; font-family: var(--serif); font-style: italic; font-size: 14.5px; line-height: 1.45; color: var(--text); }
+.pl-motto span { font-family: var(--sans); font-style: normal; font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.pl-tabs { display: flex; width: 100%; margin-top: 12px; }
+.pl-tabs button { flex: 1; min-width: 0; padding: 8px 4px; white-space: nowrap; }
+.pl-tabs i { font-style: normal; display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 2px; border-radius: 99px;
+  font-size: 11px; background: var(--surface); color: var(--muted); }
+.pl-tabs button.on i { background: color-mix(in srgb, var(--on-accent) 22%, transparent); color: inherit; }
+.pl-panel { margin-top: 14px; }
+.pl-panel .pl-scroll { margin-top: 0; }
+.pl-addbtn { height: 48px; margin-bottom: 12px; font-size: 15px; }
+.pl-addbtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+@media (min-width: 760px) { .pl-tabs { max-width: 520px; } }
+.pl-tabs button span[aria-label] { font-size: 16px; }
+.pl-fab { position: fixed; right: max(18px, calc(50% - 572px)); bottom: calc(92px + var(--safe-bottom)); z-index: 25; width: 58px; height: 58px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--accent); color: var(--on-accent); box-shadow: 0 12px 30px -8px rgba(30, 60, 200, .55), 0 0 0 1px rgba(255,255,255,.35); }
+.pl-fab svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
+.pl-fab:active { transform: scale(.94); }
