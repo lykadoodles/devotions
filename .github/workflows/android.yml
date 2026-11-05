@@ -115,6 +115,7 @@ jobs:
             Lamp.aab
 
       - name: Publish to the "latest" release
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -123,3 +124,17 @@ jobs:
             --title "Lamp (build ${{ github.run_number }})" \
             --notes "**Lamp.apk**: install directly on an Android phone. **Lamp.aab**: upload to Google Play Console. Built from ${GITHUB_SHA::7}." \
             --latest
+
+      # Builds from other branches (run by hand from the Actions tab) go to a
+      # separate "preview" pre-release, so testing a branch never replaces the
+      # APK everyone downloads from "latest".
+      - name: Publish to the "preview" pre-release
+        if: github.ref != 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete preview --yes --cleanup-tag || true
+          gh release create preview Lamp.apk \
+            --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "Lamp preview: ${GITHUB_REF_NAME} (build ${{ github.run_number }})" \
+            --notes "Test build from the **${GITHUB_REF_NAME}** branch (${GITHUB_SHA::7}). Installs over your current Lamp and keeps your progress."
