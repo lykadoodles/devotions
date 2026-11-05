@@ -207,15 +207,17 @@ export function render(weekParam, openId) {
   const goalsHTML = `
     <button class="btn block pl-addbtn" data-pl="goal-add">${ico(I.plus)} Add a goal</button>
     ${review && gl.some((g) => g.goal && !g.result) ? `<div class="banner pl-review"><div><b>Week in review</b><div class="muted" style="font-size:13.5px;margin-top:2px">How did your goals go? Note the results below.</div></div></div>` : ''}
-    ${gl.length ? `<div class="pl-goals">${gl.map((g, i) => `
-      <div class="pl-goal rise" data-id="${g.id}">
-        <div class="pl-goal-top"><span class="pl-num">${i + 1}</span>
-          <textarea rows="1" data-plf="goal" data-id="${g.id}" placeholder="Goal" maxlength="200">${esc(g.goal)}</textarea>
-          <button class="pl-del" data-pl="goal-del" data-id="${g.id}" aria-label="Delete goal">${ico(I.trash)}</button></div>
-        <label>Next action step<input type="text" data-plf="next" data-id="${g.id}" value="${esc(g.next)}" placeholder="The very next thing to do" maxlength="200"></label>
-        <label class="pl-due">Deadline<input type="date" data-plf="due" data-id="${g.id}" value="${esc(g.due)}"></label>
-        <label>Results / remarks<textarea rows="2" data-plf="result" data-id="${g.id}" placeholder="${review ? 'How did it go?' : 'Fill this in at the end of the week'}" maxlength="400">${esc(g.result)}</textarea></label>
-      </div>`).join('')}</div>` : `<p class="help" style="text-align:center;margin:14px 0">Set a few goals for the week, each with its next action and a deadline.</p>`}`;
+    ${gl.length ? `<div class="pl-gtable-wrap"><div class="pl-gtable" role="table">
+      <div class="pl-grow pl-ghead" role="row"><span></span><span>Goals for the week</span><span>Next action step</span><span>Deadline</span><span>Results / remarks</span><span></span></div>
+      ${gl.map((g, i) => `<div class="pl-grow" role="row" data-id="${g.id}">
+        <span class="pl-gnum">${i + 1}</span>
+        <textarea rows="1" data-plf="goal" data-id="${g.id}" placeholder="Goal" maxlength="200" aria-label="Goal">${esc(g.goal)}</textarea>
+        <textarea rows="1" data-plf="next" data-id="${g.id}" placeholder="Next step" maxlength="200" aria-label="Next action step">${esc(g.next)}</textarea>
+        <input type="date" data-plf="due" data-id="${g.id}" value="${esc(g.due)}" aria-label="Deadline">
+        <textarea rows="1" data-plf="result" data-id="${g.id}" placeholder="${review ? 'How did it go?' : 'End of week'}" maxlength="400" aria-label="Results or remarks">${esc(g.result)}</textarea>
+        <button class="pl-del" data-pl="goal-del" data-id="${g.id}" aria-label="Delete goal">${ico(I.trash)}</button>
+      </div>`).join('')}
+    </div></div>` : `<p class="help" style="text-align:center;margin:14px 0">Set a few goals for the week, each with its next action and a deadline.</p>`}`;
 
   $app.classList.add('planner-mode');
   $app.innerHTML = `
@@ -238,9 +240,17 @@ export function render(weekParam, openId) {
     </div>
     ${placing ? placingBar() : tab === 'week' ? `<button class="pl-fab" data-pl="quick" aria-label="Add">${ico(I.plus)}</button>` : ''}
   `;
+  fitGoalBoxes();
+  document.fonts?.ready.then(fitGoalBoxes);
   if (tab !== 'week') return;
   layout(week === curWeek ? days.indexOf(t) : 0);
 }
+
+// Goal cells grow with their text, like writing on more lines of the page
+function fitGoalBoxes() {
+  document.querySelectorAll('.pl-grow textarea').forEach((el) => { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; });
+}
+addEventListener('resize', fitGoalBoxes);
 
 function placingBar() {
   const it = itemById(placing);
