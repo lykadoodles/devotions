@@ -921,3 +921,8 @@ body.has-player .listen-fab, body:has(#vbar) .listen-fab { display: none; }
   .pl-ghead span { padding: 9px 8px; font-size: 10.5px; }
   .pl-grow textarea, .pl-grow input { padding-left: 10px; padding-right: 10px; }
 }
+/* column lines: the text cells reset their borders above, so draw them back */
+.pl-grow > textarea { border-left: 1px solid var(--line); }
+.pl-ghead { align-items: stretch; }
+.pl-ghead span { display: flex; align-items: center; justify-content: center; }
+.pl-grow > .pl-gcell { align-self: stretch; }
