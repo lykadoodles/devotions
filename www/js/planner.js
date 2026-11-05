@@ -208,13 +208,13 @@ export function render(weekParam, openId) {
     <button class="btn block pl-addbtn" data-pl="goal-add">${ico(I.plus)} Add a goal</button>
     ${review && gl.some((g) => g.goal && !g.result) ? `<div class="banner pl-review"><div><b>Week in review</b><div class="muted" style="font-size:13.5px;margin-top:2px">How did your goals go? Note the results below.</div></div></div>` : ''}
     ${gl.length ? `<div class="pl-gtable-wrap"><div class="pl-gtable" role="table">
-      <div class="pl-grow pl-ghead" role="row"><span></span><span>Goals for the week</span><span>Next action step</span><span>Deadline</span><span>Results / remarks</span><span></span></div>
+      <div class="pl-grow pl-ghead" role="row"><span></span><span>Goals for the week</span><span>Next action step</span><span class="pl-wide">Deadline</span><span class="pl-wide">Results / remarks</span><span></span></div>
       ${gl.map((g, i) => `<div class="pl-grow" role="row" data-id="${g.id}">
         <span class="pl-gnum">${i + 1}</span>
         <textarea rows="1" data-plf="goal" data-id="${g.id}" placeholder="Goal" maxlength="200" aria-label="Goal">${esc(g.goal)}</textarea>
         <textarea rows="1" data-plf="next" data-id="${g.id}" placeholder="Next step" maxlength="200" aria-label="Next action step">${esc(g.next)}</textarea>
-        <input type="date" data-plf="due" data-id="${g.id}" value="${esc(g.due)}" aria-label="Deadline">
-        <textarea rows="1" data-plf="result" data-id="${g.id}" placeholder="${review ? 'How did it go?' : 'End of week'}" maxlength="400" aria-label="Results or remarks">${esc(g.result)}</textarea>
+        <label class="pl-gcell pl-gdue"><small>Deadline</small><input type="date" data-plf="due" data-id="${g.id}" value="${esc(g.due)}"></label>
+        <label class="pl-gcell pl-gres"><small>Results / remarks</small><textarea rows="1" data-plf="result" data-id="${g.id}" placeholder="${review ? 'How did it go?' : 'End of week'}" maxlength="400">${esc(g.result)}</textarea></label>
         <button class="pl-del" data-pl="goal-del" data-id="${g.id}" aria-label="Delete goal">${ico(I.trash)}</button>
       </div>`).join('')}
     </div></div>` : `<p class="help" style="text-align:center;margin:14px 0">Set a few goals for the week, each with its next action and a deadline.</p>`}`;
