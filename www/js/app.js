@@ -14,6 +14,7 @@ import * as J from './journal.js';
 import * as Backup from './backup.js';
 import * as Audio from './audio.js';
 import { openCardMaker } from './sharecard.js';
+import { initSheets } from './sheets.js';
 import * as Planner from './planner.js';
 
 const $app = document.getElementById('app');
@@ -2113,6 +2114,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 (async function init() {
+  initSheets();
   await Promise.all([load(), loadPlan()]);
   countOpen();
   Planner.init({ app: $app, toast, onChange: () => scheduleReminders(), askNotif: () => notifPermission() });
