@@ -26,6 +26,8 @@ const DEFAULTS = () => ({
   voices: { en: '', fil: '' },
   drama: true,
   dramaVoices: { en: {}, fil: {} },
+  // voiceGender[voiceId] = 'm' | 'f' (set by the reader; phones don't say)
+  voiceGender: {},
   // done[track][key] = date it was marked read
   done: { ot: {}, nt: {}, ps: {}, pr: {} },
   // log[date] = number of portions marked read that day
@@ -72,7 +74,7 @@ export function save() {
 export function reset(keepSettings = true) {
   const keep = keepSettings
     ? { name: state.name, translation: state.translation, nltKey: state.nltKey, esvKey: state.esvKey, theme: state.theme,
-        fontScale: state.fontScale, readFont: state.readFont, readPage: state.readPage, music: state.music, reminder: state.reminder, rhemaNotif: state.rhemaNotif, audioRate: state.audioRate, prayAudio: state.prayAudio, voices: state.voices, drama: state.drama, dramaVoices: state.dramaVoices, onboarded: state.onboarded }
+        fontScale: state.fontScale, readFont: state.readFont, readPage: state.readPage, music: state.music, reminder: state.reminder, rhemaNotif: state.rhemaNotif, audioRate: state.audioRate, prayAudio: state.prayAudio, voices: state.voices, drama: state.drama, dramaVoices: state.dramaVoices, voiceGender: state.voiceGender, onboarded: state.onboarded }
     : {};
   Object.assign(state, DEFAULTS(), keep);
   save();

@@ -866,10 +866,11 @@ function viewJournal() {
 // ---------- reading options sheet ----------
 // ---------- read-aloud voice picker ----------
 const REGION = { US: 'US', GB: 'UK', AU: 'Australian', IN: 'Indian', PH: 'Philippine', CA: 'Canadian', IE: 'Irish', ZA: 'South African', NG: 'Nigerian' };
-function voiceLabel(v, i) {
+function voiceLabel(v, i, chip = false) {
   const region = REGION[(v.lang || '').split(/[-_]/)[1]?.toUpperCase()] || '';
   const where = /network/i.test(v.name || v.voiceURI || '') ? 'needs internet' : 'offline';
-  return { title: `Voice ${i + 1}`, sub: `${region ? `${region} accent · ` : ''}${where}` };
+  const g = Audio.genderOf(v);
+  return { title: `Voice ${i + 1}${g && !chip ? ` · ${g === 'm' ? 'Male' : 'Female'}` : ''}`, sub: `${region ? `${region} accent · ` : ''}${where}` };
 }
 async function currentVoiceName(key) {
   const want = state.voices?.[key];
@@ -880,11 +881,17 @@ async function currentVoiceName(key) {
 }
 const ROLES = [['narrator', 'Narrator'], ['male', 'Men'], ['female', 'Women'], ['god', 'God']];
 async function openVoicePicker(key, role = 'narrator') {
-  const list = (await Audio.voicesFor(key)).slice(0, 30);
+  const all = (await Audio.voicesFor(key)).slice(0, 30);
   const o = document.createElement('div');
   o.className = 'overlay sheet-overlay';
   const render = () => {
     const cur = Audio.voiceIdFor(key, role);
+    // Men and God list only male voices, Women only female; the Narrator tab lists all,
+    // and is where untagged voices get tagged Male or Female.
+    const want = Audio.roleGender(role);
+    const list = all.map((v, i) => ({ v, i })).filter(({ v }) => !want || Audio.genderOf(v) === want);
+    const untagged = all.filter((v) => !Audio.genderOf(v)).length;
+    const gWord = want === 'm' ? 'male' : 'female';
     const auto = role === 'narrator'
       ? { title: 'Phone default', sub: 'Whatever your phone uses' }
       : { title: 'Automatic', sub: role === 'god' ? 'Narrator voice, deeper and slower' : role === 'male' ? 'Narrator voice, lower' : 'Narrator voice, higher' };
@@ -898,10 +905,14 @@ async function openVoicePicker(key, role = 'narrator') {
       <div class="voice-list">
         <div class="voice-row ${!cur ? 'on' : ''}"><button class="voice-pick" data-voice=""><span class="radio"></span><span><b>${auto.title}</b><small>${auto.sub}</small></span></button>
           <button class="icon-btn voice-play" data-play="" aria-label="Preview">${icon('play')}</button></div>
-        ${list.map((v, i) => { const L = voiceLabel(v, i); const id = v.voiceURI || v.name; return `
+        ${list.map(({ v, i }) => { const L = voiceLabel(v, i, !want && Audio.dramaOn()); const id = v.voiceURI || v.name; const g = Audio.genderOf(v); return `
         <div class="voice-row ${cur === id ? 'on' : ''}"><button class="voice-pick" data-voice="${esc(id)}"><span class="radio"></span><span><b>${L.title}</b><small>${esc(L.sub)}</small></span></button>
+          ${!want && Audio.dramaOn() ? `<button class="g-tag ${g ? `g-${g}` : ''}" data-gtag="${esc(id)}" aria-label="Mark as male or female">${g === 'm' ? 'Male' : g === 'f' ? 'Female' : 'Tag'}</button>` : ''}
           <button class="icon-btn voice-play" data-play="${esc(id)}" aria-label="Preview ${L.title}">${icon('play')}</button></div>`; }).join('')}
-        ${list.length ? '' : `<p class="muted" style="font-size:13px">No extra voices found. You can add voices in Android Settings → Text-to-speech output → Install voice data.</p>`}
+        ${!all.length ? `<p class="muted" style="font-size:13px">No extra voices found. You can add voices in Android Settings → Text-to-speech output → Install voice data.</p>`
+          : want && !list.length ? `<p class="muted" style="font-size:13px">No ${gWord} voices marked yet. Open the <b>Narrator</b> tab, tap ▶ to hear each voice, then tap <b>Tag</b> to mark it Male or Female.</p>`
+          : want && untagged ? `<p class="muted" style="font-size:12px">${untagged} voice${untagged > 1 ? 's' : ''} not tagged yet. Tag them in the <b>Narrator</b> tab and the ${gWord} ones will show here.</p>`
+          : !want && Audio.dramaOn() && untagged ? `<p class="muted" style="font-size:12px">Tap <b>Tag</b> to mark a voice Male or Female. Men and God use male voices, Women use female voices.</p>` : ''}
       </div>
       <p class="muted" style="font-size:12px;margin:10px 0 0">More voices: Android Settings → Accessibility (or General management) → Text-to-speech output → Install voice data.</p>
       <button class="btn primary block" data-done style="margin-top:12px">Done</button>
@@ -909,11 +920,13 @@ async function openVoicePicker(key, role = 'narrator') {
   };
   render();
   document.body.appendChild(o);
-  const byId = (id) => list.find((v) => (v.voiceURI || v.name) === id) || null;
+  const byId = (id) => all.find((v) => (v.voiceURI || v.name) === id) || null;
   o.addEventListener('click', (e) => {
     if (e.target === o || e.target.closest('[data-done]')) { Audio.hushNow(); o.remove(); if (location.hash.includes('settings')) route(); return; }
     const rt = e.target.closest('[data-role]');
     if (rt) { role = rt.dataset.role; render(); return; }
+    const gt = e.target.closest('[data-gtag]');
+    if (gt) { const v = byId(gt.dataset.gtag); if (!v) return; const g = Audio.genderOf(v); Audio.setGender(key, v, g === '' ? 'm' : g === 'm' ? 'f' : ''); haptic(); render(); return; }
     const pl = e.target.closest('[data-play]');
     if (pl) { Audio.preview(byId(pl.dataset.play), key, role); return; }
     const pk = e.target.closest('[data-voice]');

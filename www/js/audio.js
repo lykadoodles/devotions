@@ -59,6 +59,36 @@ export function setVoice(key, v, role = 'narrator') {
 export const voiceIdFor = (key, role = 'narrator') => (role === 'narrator' ? state.voices?.[key] : state.dramaVoices?.[key]?.[role]) || '';
 export const dramaOn = () => state.drama !== false;
 
+// Male or female? Phones don't say, so: the reader's own tag first, then
+// voice names that give it away (Samsung "SMTf00"/"SMTm00", "… Male"/"… Female",
+// and a few Google voice codes known for sure). Otherwise unknown ('').
+const KNOWN = { iom: 'm', tpd: 'm', rjs: 'm', sfg: 'f', gba: 'f' };
+export function genderOf(v) {
+  if (!v) return '';
+  const id = v.voiceURI || v.name || '';
+  const own = state.voiceGender?.[id];
+  if (own) return own;
+  const n = `${v.name || ''} ${v.voiceURI || ''}`.toLowerCase();
+  const smt = n.match(/smt([fm])\d/); if (smt) return smt[1];
+  if (/\bfemale\b|\bwoman\b/.test(n)) return 'f';
+  if (/\bmale\b|\bman\b/.test(n)) return 'm';
+  const code = n.match(/-x-([a-z]{3})(?:-|\b)/); if (code && KNOWN[code[1]]) return KNOWN[code[1]];
+  return '';
+}
+// Tagging a voice: if it was picked for the other sex's role, that role goes back to Automatic
+export function setGender(key, v, g) {
+  const id = v.voiceURI || v.name;
+  const map = { ...(state.voiceGender || {}) };
+  if (g) map[id] = g; else delete map[id];
+  state.voiceGender = map;
+  const dv = { ...(state.dramaVoices?.[key] || {}) };
+  for (const role of ['male', 'female', 'god']) if (dv[role] === id && g && g !== (role === 'female' ? 'f' : 'm')) delete dv[role];
+  state.dramaVoices = { ...(state.dramaVoices || {}), [key]: dv };
+  save();
+}
+// Which voices a role may use: Men and God get male voices, Women female voices
+export const roleGender = (role) => (role === 'female' ? 'f' : role === 'male' || role === 'god' ? 'm' : '');
+
 // Dramatized reading: each character role gets its own voice. Without a chosen
 // voice, the narrator's voice is pitched (lower for men, higher for women, and
 // lower and a little slower for God) so the roles still sound different.

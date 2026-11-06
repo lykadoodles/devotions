@@ -744,3 +744,8 @@ body.has-player .listen-fab, body:has(#vbar) .listen-fab { display: none; }
 .rhema-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .rhema-foot .link-btn { font-size: 13px; }
 .tabs a { min-width: 0; }
+
+/* voice gender tag (voice picker) */
+.g-tag{flex:none;border:1px solid var(--line,rgba(127,127,127,.35));background:transparent;color:inherit;border-radius:999px;padding:4px 10px;font:600 12px/1 var(--sans,inherit);opacity:.75;min-width:58px}
+.g-tag.g-m{background:rgba(70,120,255,.18);border-color:rgba(70,120,255,.5);opacity:1}
+.g-tag.g-f{background:rgba(255,90,150,.18);border-color:rgba(255,90,150,.5);opacity:1}
