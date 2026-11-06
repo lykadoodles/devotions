@@ -13,6 +13,7 @@ import * as PL from './prayerlist.js';
 import * as J from './journal.js';
 import * as Backup from './backup.js';
 import * as Audio from './audio.js';
+import { openCardMaker } from './sharecard.js';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -800,6 +801,12 @@ async function shareVerses(text, title) {
     else if (navigator.share) await navigator.share({ text });
     else { await navigator.clipboard.writeText(text); toast('Copied'); }
   } catch {}
+}
+
+// Share opens the verse card maker (picture with background and font); plain text is one tap away
+function shareVerseCard(text, ref, tr) {
+  const plain = `${J.quote(text)}\n— ${ref}${tr ? ` (${tr})` : ''}`;
+  openCardMaker({ text: text.replace(/^[“"]|[”"]$/g, ''), ref, tr }, { shareAsText: () => shareVerses(plain, ref), toast });
 }
 
 // tap a verse to select / unselect it
@@ -1791,7 +1798,7 @@ document.addEventListener('click', async (e) => {
     try { await navigator.clipboard.writeText(shareText(selectedItems())); toast('Copied'); } catch { toast('Couldn’t copy'); }
     clearSelection();
   }
-  if (a === 'v-share') { const items = selectedItems(); await shareVerses(shareText(items), J.refOf(items.map((i) => i.k))); clearSelection(); }
+  if (a === 'v-share') { const items = selectedItems(); shareVerseCard(items.map((i) => i.text).join(' '), J.refOf(items.map((i) => i.k)), readerTr); clearSelection(); }
   if (a === 'v-note') {
     const items = selectedItems();
     const ref = J.refOf(items.map((i) => i.k));
@@ -1819,12 +1826,12 @@ document.addEventListener('click', async (e) => {
   if (a === 'j-emo') { journalEmoji = el.dataset.emoji; viewJournal(); }
   if (a === 'j-share') {
     const n = J.allNotes().find((x) => x.id === el.dataset.id);
-    if (n) await shareVerses(`${J.quote(n.text)}\n— ${n.ref}${n.tr ? ` (${n.tr})` : ''}`, n.ref);
+    if (n) shareVerseCard(n.text, n.ref, n.tr);
   }
   if (a === 'h-share') {
     const h = J.highlightOf(el.dataset.k);
     const hv = h || J.reactionOf(el.dataset.k);
-    if (hv) await shareVerses(`${J.quote(hv.text)}\n— ${J.refOf([el.dataset.k])}${hv.tr ? ` (${hv.tr})` : ''}`, J.refOf([el.dataset.k]));
+    if (hv) shareVerseCard(hv.text, J.refOf([el.dataset.k]), hv.tr);
   }
   if (a === 'h-remove') { J.setHighlight([{ k: el.dataset.k }], null); J.setReaction([{ k: el.dataset.k }], null); viewJournal(); toast('Removed'); }
   if (a === 'j-menu') {
@@ -1940,15 +1947,7 @@ document.addEventListener('click', async (e) => {
     el.classList.add('spin'); setTimeout(() => el.classList.remove('spin'), 500);
     loadRhema(idx);
   }
-  if (a === 'rhema-share' && rhemaShown?.text) {
-    const msg = `“${rhemaShown.text}”\n— ${rhemaShown.ref} (${rhemaShown.translation})`;
-    const Sh = P().Share;
-    try {
-      if (Sh) await Sh.share({ title: rhemaShown.ref, text: msg, dialogTitle: 'Share this verse' });
-      else if (navigator.share) await navigator.share({ text: msg });
-      else { await navigator.clipboard.writeText(msg); toast('Verse copied'); }
-    } catch {}
-  }
+  if (a === 'rhema-share' && rhemaShown?.text) shareVerseCard(rhemaShown.text, rhemaShown.ref, rhemaShown.translation);
   if (a === 'readfont') {
     state.readFont = state.readFont === 'sans' ? 'serif' : 'sans'; save(); applyTheme();
     el.innerHTML = state.readFont === 'sans' ? '<span style="font-family:var(--serif);font-size:19px;font-weight:600">Aa</span>' : '<span style="font-family:var(--sans);font-size:18px;font-weight:800">Aa</span>';

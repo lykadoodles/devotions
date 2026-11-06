@@ -53,6 +53,8 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string audio" "$PL"
           # Lamp uses only standard HTTPS: no export-compliance questions on each upload
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string Lamp lets you pick a photo as the background of a verse picture you share." "$PL" || true
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string Lamp lets you take a photo to use as the background of a verse picture you share." "$PL" || true
           # Privacy manifest (no data collected, no tracking)
           cp scripts/ios/PrivacyInfo.xcprivacy ios/App/App/
           gem list -i xcodeproj >/dev/null || sudo gem install xcodeproj --no-document
