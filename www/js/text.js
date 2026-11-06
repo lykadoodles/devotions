@@ -291,6 +291,9 @@ export async function passage(range, { patient = false } = {}) {
 }
 
 // Plain text of a short passage (Rhema card, sharing). `online:false` = instant built-in text.
+// Built-in translation text (works offline), e.g. Tagalog birthday greetings
+export const verseTextIn = async (range, code) => ({ text: (await localText(range, code)).replace(/\s+/g, ' ').trim(), translation: code });
+
 export async function verseText(range, { online = true } = {}) {
   if (online && wantsOnline()) {
     try { return await verseTextOnline(range); } catch {}

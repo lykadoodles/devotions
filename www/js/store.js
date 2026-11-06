@@ -2,6 +2,8 @@
 // storage clears) and localStorage in a plain browser.
 import { today, addDays, diffDays } from './plan.js';
 
+export const DEFAULT_PLANNER = () => ({ on: false, from: 7, to: 21, bdayNotif: true, items: [], goals: [], birthdays: [] });
+
 const KEY = 'lamp.state.v1';
 const prefs = () => window.Capacitor?.Plugins?.Preferences;
 
@@ -34,6 +36,8 @@ const DEFAULTS = () => ({
   log: {},
   badges: {},
   earlyReads: 0,
+  // Weekly planner (optional tab). See planner.js
+  planner: DEFAULT_PLANNER(),
 });
 
 export const state = DEFAULTS();
@@ -55,6 +59,7 @@ export function normalize(s) {
     reminder: { ...d.reminder, ...(s.reminder || {}) },
     rhemaNotif: { ...d.rhemaNotif, ...(s.rhemaNotif || {}) },
     music: { ...d.music, ...(s.music || {}) },
+    planner: { ...d.planner, ...(s.planner || {}) },
   });
 }
 
@@ -74,7 +79,7 @@ export function save() {
 export function reset(keepSettings = true) {
   const keep = keepSettings
     ? { name: state.name, translation: state.translation, nltKey: state.nltKey, esvKey: state.esvKey, theme: state.theme,
-        fontScale: state.fontScale, readFont: state.readFont, readPage: state.readPage, music: state.music, reminder: state.reminder, rhemaNotif: state.rhemaNotif, audioRate: state.audioRate, prayAudio: state.prayAudio, voices: state.voices, drama: state.drama, dramaVoices: state.dramaVoices, voiceGender: state.voiceGender, onboarded: state.onboarded }
+        fontScale: state.fontScale, readFont: state.readFont, readPage: state.readPage, music: state.music, reminder: state.reminder, rhemaNotif: state.rhemaNotif, audioRate: state.audioRate, prayAudio: state.prayAudio, voices: state.voices, drama: state.drama, dramaVoices: state.dramaVoices, voiceGender: state.voiceGender, onboarded: state.onboarded, planner: state.planner }
     : {};
   Object.assign(state, DEFAULTS(), keep);
   save();

@@ -79,6 +79,9 @@ export function summarize(data) {
     notes: (data.notes || []).length,
     reactions: Object.keys(data.reactions || {}).length,
     prayers: (data.prayers || []).length,
+    plans: (data.planner?.items || []).filter((x) => !x.deleted).length,
+    goals: (data.planner?.goals || []).filter((x) => !x.deleted && x.goal).length,
+    birthdays: (data.planner?.birthdays || []).filter((x) => !x.deleted).length,
   };
 }
 
