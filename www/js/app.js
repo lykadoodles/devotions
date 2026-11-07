@@ -1,7 +1,7 @@
 import {
   loadPlan, META, PLAN, DAYS, PR_BOOK, PS_BOOK, TRACKS, TRACK_ORDER, today, addDays, diffDays, fmtDate,
   planDayFor, readingsFor, readingFor, label, verseCount, minutes, proverbsChapters,
-  BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES, chapters,
+  BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES, chapters, bookName,
 } from './plan.js';
 import { state, load, save, reset, isDone, setDone, streak, longestStreak, isLit, LIT, setLitHook } from './store.js';
 import { passage, prefetch, savedCount, testKey, hasBuiltInKey, hasKey, verseText, verseTextOnline, verseTextSaved, wantsOnline, TRACK_SPOKEN, NOTICES, TRANSLATIONS, TRANSLATION_ORDER, current as currentTranslation } from './text.js';
@@ -15,6 +15,7 @@ import * as Backup from './backup.js';
 import * as Audio from './audio.js';
 import { openCardMaker } from './sharecard.js';
 import { initSheets } from './sheets.js';
+import * as Notebook from './notebook.js';
 import * as Planner from './planner.js';
 
 const $app = document.getElementById('app');
@@ -1058,6 +1059,34 @@ function parseRef(q) {
   return { b, c: n === 1 && !c ? 1 : c, v };
 }
 
+// Finds Bible references in free text ("Prov 6:6-8", "Gen 41:34", "1 Tim 6:17",
+// "Psalm 23", "Juan 3:16") for notes in the planner and notebook.
+// Without a colon only a full book name or known abbreviation counts, so
+// everyday words followed by a number ("is 3", "Week 2") aren't mistaken for books.
+function findRefs(text) {
+  const out = []; const seen = new Set();
+  const re = /(?<![\p{L}\d])((?:[1-3]\s*)?(?:mga\s+)?\p{L}{2,}\.?)\s*(\d{1,3})(?:\s*:\s*(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?)?/giu;
+  const src = String(text);
+  for (let m; (m = re.exec(src));) {
+    // on a miss, retry just after the word, so "and 1 Tim 6:17" still finds "1 Tim 6:17"
+    const retry = () => { re.lastIndex = m.index + m[1].length; };
+    const word = m[1].replace(/\.$/, '');
+    const n = normName(word);
+    const strict = !m[3];
+    const num = n.match(/^[1-3]/)?.[0] || '';
+    const known = BOOK_ABBR[n] || BOOK_ABBR[n.slice(num.length)] || (bookIndexCache || META.books.map((x, i) => [normName(x.name), i])).some(([k]) => k === n);
+    if (strict ? !known : !known && n.replace(/^[1-3]/, '').length < 3) { retry(); continue; }
+    const r = parseRef(`${word} ${m[2]}${m[3] ? `:${m[3]}` : ''}`);
+    if (!r || !r.c || (m[3] && !r.v)) { retry(); continue; }
+    const v2 = m[4] && r.v && +m[4] > r.v ? Math.min(+m[4], META.books[r.b].verses[r.c - 1]) : 0;
+    const id = `${r.b}.${r.c}.${r.v}.${v2}`;
+    if (seen.has(id)) continue; seen.add(id);
+    const name = bookName(r.b, true);
+    out.push({ label: `${name} ${r.c}${r.v ? `:${r.v}${v2 ? `–${v2}` : ''}` : ''}`, href: bibleHref(r.b, r.c, r.v), b: r.b, c: r.c, v: r.v });
+  }
+  return out;
+}
+
 function viewBible() {
   $tabs.hidden = false;
   const read = planReadChapters();
@@ -1316,6 +1345,11 @@ function viewJourney() {
       <div class="t"><b>Your journal</b><span>${J.noteCount()} heart note${J.noteCount() === 1 ? '' : 's'} · ${J.markedVerses().length} marked verse${J.markedVerses().length === 1 ? '' : 's'}</span></div>
       <div class="icon-btn">${icon('arrow')}</div>
     </a>
+    <a class="card section journal-card rise" href="#/notebook">
+      <div class="nb-icon">📖</div>
+      <div class="t"><b>Notebook</b><span>${Notebook.count() ? `${Notebook.count()} page${Notebook.count() === 1 ? '' : 's'} · ` : ''}Sermon notes, devotions, letters to God</span></div>
+      <div class="icon-btn">${icon('arrow')}</div>
+    </a>
 
     <div class="section">
       <div class="section-head"><div class="h2">Four streams</div></div>
@@ -1502,6 +1536,10 @@ function viewWelcome() {
           <button style="flex:1" data-start="pick">Pick a date</button>
         </div>
         <input class="field" style="margin:0" id="wstart" type="date" value="${t}" hidden>
+        <div class="welcome-opt">
+          <div class="t"><b>🗓️ Weekly planner <small>optional</small></b><span>Plan your week and month around your daily readings: to-dos, goals, your routine and birthdays. You can change this later in Settings.</span></div>
+          <button class="switch" id="wplanner" data-action="wplanner" role="switch" aria-checked="false" aria-label="Turn on the weekly planner"></button>
+        </div>
         <button class="btn primary block" data-action="begin" style="margin-top:8px">${icon('flame').replace('<svg', '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"')} Light the lamp</button>
         <button class="restore-link" data-action="import">Coming from another phone? <b>Restore a backup</b></button>
       </div>
@@ -1721,7 +1759,7 @@ function routeView(same) {
   const reader = view === 'read' || view === 'pray' || (view === 'bible' && !!b);
   $tabs.hidden = reader;
   if (!reader && music.isPlaying()) { music.stop(); }
-  $tabs.querySelectorAll('a').forEach((x) => x.classList.toggle('on', x.dataset.tab === (view === 'day' ? 'today' : view === 'journal' ? 'journey' : view || 'today')));
+  $tabs.querySelectorAll('a').forEach((x) => x.classList.toggle('on', x.dataset.tab === (view === 'day' ? 'today' : view === 'journal' || view === 'notebook' ? 'journey' : view || 'today')));
   if (!reader && !same) window.scrollTo(0, 0);
   if (view === 'pray') return viewPrayer(a === 'close' ? 'close' : 'open', isDate(b) && b > today() ? b : today());
   if (view === 'day') return viewToday(isDate(a) ? a : today());
@@ -1733,6 +1771,7 @@ function routeView(same) {
   if (view === 'catchup') return viewCatchup();
   if (view === 'prayer') return viewPrayerList();
   if (view === 'journal') return viewJournal();
+  if (view === 'notebook') return Notebook.render(a, b);
   return viewToday();
 }
 
@@ -1995,9 +2034,12 @@ document.addEventListener('click', async (e) => {
     save(); applyTheme();
     if (!location.hash.startsWith('#/read')) route();
   }
+  if (a === 'wplanner') { el.classList.toggle('on'); el.setAttribute('aria-checked', String(el.classList.contains('on'))); haptic(); return; }
   if (a === 'begin') {
     state.name = document.getElementById('wname').value.trim();
     state.startDate = document.getElementById('wstart').value || today();
+    state.planner ||= Planner.DEFAULT_PLANNER();
+    state.planner.on = !!document.getElementById('wplanner')?.classList.contains('on');
     state.onboarded = true; save();
     location.hash = '#/today'; route();
     confetti(.6); haptic('success');
@@ -2117,7 +2159,8 @@ document.addEventListener('visibilitychange', () => {
   initSheets();
   await Promise.all([load(), loadPlan()]);
   countOpen();
-  Planner.init({ app: $app, toast, onChange: () => scheduleReminders(), askNotif: () => notifPermission() });
+  Planner.init({ app: $app, toast, onChange: () => scheduleReminders(), askNotif: () => notifPermission(), refs: findRefs });
+  Notebook.init({ app: $app, toast, refs: findRefs, tabs: $tabs });
   applyTheme();
   route();
   scheduleReminders();

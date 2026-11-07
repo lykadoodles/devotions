@@ -19,6 +19,12 @@ const P = () => {
   state.planner.items ||= [];
   state.planner.goals ||= [];
   state.planner.birthdays ||= [];
+  state.planner.dayNotes ||= [];
+  state.planner.monthGoals ||= [];
+  state.planner.monthly ||= [];
+  const r = (state.planner.routine ||= {});
+  r.blocks ||= []; r.days ||= [0, 1, 2, 3, 4]; if (r.show == null) r.show = true;
+  if (!Array.isArray(r.week) || r.week.length !== 7) r.week = ['', '', '', '', '', '', ''];
   return state.planner;
 };
 export const enabled = () => !!state.planner?.on;
@@ -120,10 +126,10 @@ let $app = null;
 let toast = () => {};
 let shownWeek = null;
 let placing = null; // id of the to-do waiting for a time slot
-let tab = 'week';   // week | todos | goals | bdays
+let tab = 'week';   // week | month | todos | goals | routine | bdays
 
-const hooks = { changed: () => {}, askNotif: null };
-export function init(deps) { $app = deps.app; toast = deps.toast || toast; hooks.changed = deps.onChange || hooks.changed; hooks.askNotif = deps.askNotif || null; }
+const hooks = { changed: () => {}, askNotif: null, refs: () => [] };
+export function init(deps) { $app = deps.app; toast = deps.toast || toast; hooks.changed = deps.onChange || hooks.changed; hooks.askNotif = deps.askNotif || null; hooks.refs = deps.refs || hooks.refs; }
 
 export function render(weekParam, openId) {
   if (weekParam === 'bday') {
@@ -183,7 +189,7 @@ export function render(weekParam, openId) {
         ${days.map(dayHead).join('')}
         ${hours.map((h) => `
           <div class="pl-hour">${hourLabel(h)}</div>
-          ${days.map((d) => `<div class="pl-slot ${d === t ? 'today' : ''}" data-pl="slot" data-date="${d}" data-hour="${h}">${inRow(d, h).map(entry).join('')}</div>`).join('')}
+          ${days.map((d) => `<div class="pl-slot ${d === t ? 'today' : ''}" data-pl="slot" data-date="${d}" data-hour="${h}">${routineIn(d, h, from, to)}${inRow(d, h).map(entry).join('')}</div>`).join('')}
         `).join('')}
       </div>
     </div>
@@ -223,20 +229,20 @@ export function render(weekParam, openId) {
   $app.innerHTML = `
     <header class="pl-head rise">
       <div class="pl-head-row">
-        <div><div class="eyebrow">${esc(span)}</div><h1 class="h1 pl-h1">Week ${wn}</h1></div>
+        ${tab === 'month' ? monthHeader() : tab === 'routine' ? `<div><div class="eyebrow">Your usual rhythm</div><h1 class="h1 pl-h1">My standard</h1></div>` : `<div><div class="eyebrow">${esc(span)}</div><h1 class="h1 pl-h1">Week ${wn}</h1></div>
         <div class="pl-weeknav">
           <a class="pl-navbtn" href="#/planner/${addDays(week, -7)}" aria-label="Previous week">${ico(I.prev)}</a>
           ${week !== curWeek ? `<a class="pl-navbtn now" href="#/planner">Today</a>` : ''}
           <a class="pl-navbtn" href="#/planner/${addDays(week, 7)}" aria-label="Next week">${ico(I.next)}</a>
-        </div>
+        </div>`}
       </div>
       <p class="pl-motto">“Commit your work to the Lord, and your plans will succeed.” <span>Proverbs 16:3 NLT</span></p>
       <div class="seg-ctl pl-tabs" role="tablist">
-        ${tabBtn('week', 'Week')}${tabBtn('todos', 'To-dos', open)}${tabBtn('goals', 'Goals', gl.length)}${tabBtn('bdays', '<span aria-label="Birthdays">🎂</span>', nB)}
+        ${tabBtn('week', 'Week')}${tabBtn('month', 'Month')}${tabBtn('todos', 'To-dos', open)}${tabBtn('goals', 'Goals', gl.length)}${tabBtn('routine', 'Routine')}${tabBtn('bdays', '<span aria-label="Birthdays">🎂</span>', nB)}
       </div>
     </header>
     <div class="pl-panel">
-      ${tab === 'todos' ? todosHTML : tab === 'goals' ? goalsHTML : tab === 'bdays' ? birthdaySection() : weekHTML}
+      ${tab === 'todos' ? todosHTML : tab === 'goals' ? goalsHTML : tab === 'bdays' ? birthdaySection() : tab === 'month' ? monthSection() : tab === 'routine' ? routineSection() : weekHTML}
     </div>
     ${placing ? placingBar() : tab === 'week' ? `<button class="pl-fab" data-pl="quick" aria-label="Add">${ico(I.plus)}</button>` : ''}
   `;
@@ -407,6 +413,17 @@ document.addEventListener('click', (e) => {
   if (a === 'done') { const it = itemById(id); updateItem(id, { done: !it.done }); rerender(); return; }
   if (a === 'place') { if (placing === id) { placing = null; rerender(); } else startPlacing(id); return; }
   if (a === 'place-cancel') { placing = null; rerender(); return; }
+  if (a === 'm-nav') { shownMonth = el.dataset.m; rerender(); return; }
+  if (a === 'm-day') { daySheet(el.dataset.date); return; }
+  if (a === 'mg-add') { const g = addMonthGoal(shownMonth); rerender(); setTimeout(() => document.querySelector(`[data-mg="${g.id}"]`)?.focus(), 50); return; }
+  if (a === 'mg-done') { const g = rec(P().monthGoals, id); if (g) touch(g, { done: !g.done }); rerender(); return; }
+  if (a === 'mg-del') { const g = rec(P().monthGoals, id); if (g && (!g.text || confirm('Delete this goal?'))) touch(g, { deleted: true }); rerender(); return; }
+  if (a === 'r-add') { blockSheet(null); return; }
+  if (a === 'r-edit') { blockSheet(id); return; }
+  if (a === 'r-day') { const r = P().routine; const d = +el.dataset.d; r.days = r.days.includes(d) ? r.days.filter((x) => x !== d) : [...r.days, d].sort(); r.updatedAt = now(); save(); rerender(); return; }
+  if (a === 'r-show') { const r = P().routine; r.show = !r.show; r.updatedAt = now(); save(); rerender(); return; }
+  if (a === 'mo-add') { monthlySheet(null); return; }
+  if (a === 'mo-edit') { monthlySheet(id); return; }
   if (a === 'goal-add') {
     const g = addGoal(shownWeek); rerender();
     setTimeout(() => document.querySelector(`textarea[data-plf="goal"][data-id="${g.id}"]`)?.focus(), 50);
@@ -428,6 +445,13 @@ document.addEventListener('submit', (e) => {
 });
 
 // Goal fields save as you type (no re-render, so the keyboard stays open)
+document.addEventListener('input', (e) => {
+  if (!onPlanner()) return;
+  const mg = e.target.closest('[data-mg]');
+  if (mg) { const g = rec(P().monthGoals, mg.dataset.mg); if (g) { g.text = mg.value; g.updatedAt = now(); } mg.style.height = 'auto'; mg.style.height = `${mg.scrollHeight}px`; clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); return; }
+  const sw = e.target.closest('[data-sw]');
+  if (sw) { const r = P().routine; r.week[+sw.dataset.sw] = sw.value; r.updatedAt = now(); sw.style.height = 'auto'; sw.style.height = `${sw.scrollHeight}px`; clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); return; }
+});
 document.addEventListener('input', (e) => {
   const el = e.target.closest('[data-plf]');
   if (!el || !onPlanner()) return;
@@ -682,5 +706,217 @@ function greetSheet(id, date) {
       if (g === 'greeted') { if (greetedIn(b, y)) { delete yearRec(b, y).greeted; touch(b); hooks.changed(); } else greeted(); }
       close(); if (onPlanner()) rerender();
     });
+  });
+}
+
+
+// ---------- month at a glance ----------
+// A paper-style month grid (Monday start): a short note on any day (verse
+// references in it become tappable), birthdays, how full each day is, the
+// standard month's recurring items, and goals for the month.
+let shownMonth = today().slice(0, 7);
+const rec = (arr, id) => arr.find((x) => x.id === id);
+const ym = (y, m) => `${y}-${String(m + 1).padStart(2, '0')}`;
+const monthOf = (key) => { const [y, m] = key.split('-').map(Number); return { y, m: m - 1 }; };
+const shiftMonth = (key, n) => { const { y, m } = monthOf(key); const d = new Date(y, m + n, 1); return ym(d.getFullYear(), d.getMonth()); };
+const dayNote = (date) => live(P().dayNotes).find((x) => x.date === date);
+export function setDayNote(date, text) {
+  let n = P().dayNotes.find((x) => x.date === date);
+  text = text.replace(/\s+$/, '');
+  if (!n) { if (!text) return; const t = now(); n = { id: uid(), date, text, createdAt: t, updatedAt: t, deleted: false }; P().dayNotes.push(n); save(); return; }
+  touch(n, { text, deleted: !text });
+}
+function addMonthGoal(month) {
+  const t = now();
+  const g = { id: uid(), month, text: '', done: false, createdAt: t, updatedAt: t, deleted: false };
+  P().monthGoals.push(g); save(); return g;
+}
+const monthlyOn = (date) => { const d = parseISO(date); const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  return live(P().monthly).filter((x) => x.day === d.getDate() || (x.day > last && d.getDate() === last)); };
+
+function monthHeader() {
+  const { y, m } = monthOf(shownMonth);
+  const cur = today().slice(0, 7);
+  return `<div><div class="eyebrow">Month at a glance</div><h1 class="h1 pl-h1">${esc(new Date(y, m, 1).toLocaleDateString(undefined, { month: 'long' }))} <span class="pl-year">${y}</span></h1></div>
+    <div class="pl-weeknav">
+      <button class="pl-navbtn" data-pl="m-nav" data-m="${shiftMonth(shownMonth, -1)}" aria-label="Previous month">${ico(I.prev)}</button>
+      ${shownMonth !== cur ? `<button class="pl-navbtn now" data-pl="m-nav" data-m="${cur}">Today</button>` : ''}
+      <button class="pl-navbtn" data-pl="m-nav" data-m="${shiftMonth(shownMonth, 1)}" aria-label="Next month">${ico(I.next)}</button>
+    </div>`;
+}
+
+function monthSection() {
+  const { y, m } = monthOf(shownMonth);
+  const first = iso(new Date(y, m, 1));
+  const start = mondayOf(first);
+  const last = new Date(y, m + 1, 0).getDate();
+  const weeks = Math.ceil((((new Date(y, m, 1).getDay() + 6) % 7) + last) / 7);
+  const t = today();
+  const all = items();
+  const cell = (d) => {
+    const dt = parseISO(d);
+    const inMonth = dt.getMonth() === m;
+    const n = dayNote(d);
+    const mo = monthlyOn(d);
+    const bd = birthdaysOn(d);
+    const count = all.filter((x) => x.date === d).length;
+    return `<button class="pl-mcell ${inMonth ? '' : 'out'} ${d === t ? 'today' : ''} ${isLit(d) ? 'lit' : ''}" data-pl="m-day" data-date="${d}">
+      <span class="pl-mnum">${dt.getDate()}${count ? `<i class="pl-mdot" title="${count} planned"></i>` : ''}</span>
+      ${bd.map((b) => `<span class="pl-mbd">🎂 ${esc(b.name)}</span>`).join('')}
+      ${mo.map((x) => `<span class="pl-mstd">${esc(x.text)}</span>`).join('')}
+      ${n ? `<span class="pl-mnote">${esc(n.text)}</span>` : ''}
+    </button>`;
+  };
+  const gls = live(P().monthGoals).filter((g) => g.month === shownMonth).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const wd = Array.from({ length: 7 }, (_, i) => parseISO(addDays(start, i)).toLocaleDateString(undefined, { weekday: 'narrow' }));
+  return `
+    <div class="pl-month rise">
+      <div class="pl-mhead">${wd.map((x) => `<span>${x}</span>`).join('')}</div>
+      <div class="pl-mgrid">${Array.from({ length: weeks * 7 }, (_, i) => cell(addDays(start, i))).join('')}</div>
+    </div>
+    <p class="help" style="text-align:center">Tap a day to write a note. Bible references like <b>Prov 6:6–8</b> become links.</p>
+    <div class="card section pl-mgoals rise">
+      <div class="eyebrow">Goals for the month</div>
+      ${gls.map((g) => `<div class="pl-mgoal ${g.done ? 'done' : ''}">
+        <button class="pl-check" data-pl="mg-done" data-id="${g.id}" aria-label="${g.done ? 'Mark not done' : 'Mark done'}">${ico(I.check)}</button>
+        <textarea rows="1" data-mg="${g.id}" placeholder="A goal for this month" maxlength="300">${esc(g.text)}</textarea>
+        <button class="pl-del" data-pl="mg-del" data-id="${g.id}" aria-label="Delete goal">${ico(I.trash)}</button>
+      </div>`).join('')}
+      <button class="btn block small pl-addbtn" data-pl="mg-add" style="margin-top:8px">${ico(I.plus)} Add a goal</button>
+    </div>`;
+}
+
+function refChips(text) {
+  const rs = hooks.refs(text || '');
+  return rs.length ? `<div class="ref-chips">${rs.map((r) => `<a class="ref-chip" href="${r.href}">${ico('<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>')}${esc(r.label)}</a>`).join('')}</div>` : '';
+}
+
+function daySheet(date) {
+  const n = dayNote(date);
+  const planned = items().filter((x) => x.date === date).sort((a, b) => (a.hour ?? 0) - (b.hour ?? 0));
+  const mo = monthlyOn(date);
+  sheet(`
+    <div class="eyebrow">${esc(fmtDate(date, { weekday: 'long', month: 'long', day: 'numeric' }))}</div>
+    <textarea class="field pl-daynote" id="pl-daynote" rows="4" placeholder="A note for this day: a verse, a reminder, a plan" maxlength="1000">${esc(n?.text || '')}</textarea>
+    <div id="pl-dayrefs">${refChips(n?.text)}</div>
+    ${mo.length ? `<div class="pl-dlist"><small>Every month</small>${mo.map((x) => `<span>${esc(x.text)}</span>`).join('')}</div>` : ''}
+    ${planned.length ? `<div class="pl-dlist"><small>Planned</small>${planned.map((x) => `<span class="${x.done ? 'done' : ''}">${hourLabel(x.hour)} · ${esc(x.text)}</span>`).join('')}</div>` : ''}
+    <a class="btn block" href="#/planner/${mondayOf(date)}" data-week-link style="margin-top:12px">Open this week</a>
+    <button class="btn primary block" data-close style="margin-top:8px">Done</button>`, (o) => {
+    const ta = o.querySelector('#pl-daynote');
+    let tm = 0;
+    const commit = () => { clearTimeout(tm); setDayNote(date, ta.value); };
+    ta.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { setDayNote(date, ta.value); o.querySelector('#pl-dayrefs').innerHTML = refChips(ta.value); }, 350); });
+    o.addEventListener('click', (e) => { if (e.target.closest('[data-week-link]')) { commit(); tab = 'week'; o.remove(); } });
+    // re-render the month when the sheet goes away (however it closes)
+    new MutationObserver((_, ob) => { if (!o.isConnected) { ob.disconnect(); commit(); if (onPlanner() && tab === 'month') rerender(); } }).observe(document.body, { childList: true });
+  });
+}
+
+// ---------- my standard (routine) ----------
+// My standard day: time blocks (start + minutes), shown faintly in the week
+// grid on the chosen weekdays. My standard week: a line per weekday. My
+// standard month: things that happen on the same date every month.
+const toMin = (hhmm) => { const [h, m] = (hhmm || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
+const fromMin = (n) => { n = ((n % 1440) + 1440) % 1440; return `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`; };
+const clock = (hhmm) => { const n = toMin(hhmm), h = Math.floor(n / 60), m = n % 60; return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`; };
+const dur = (mins) => (mins >= 60 ? `${Math.floor(mins / 60)}h${mins % 60 ? ` ${mins % 60}m` : ''}` : `${mins} min`);
+const blocks = () => live(P().routine.blocks).sort((a, b) => toMin(a.start) - toMin(b.start));
+const DAYS_SHORT = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(undefined, { weekday: 'short' })); // Mon..Sun
+
+function routineIn(date, h, from, to) {
+  const r = P().routine;
+  if (!r.show || !r.days.includes((parseISO(date).getDay() + 6) % 7)) return '';
+  return blocks().filter((b) => { const bh = Math.floor(toMin(b.start) / 60); return bh === h || (h === from && bh < from) || (h === to && bh > to); })
+    .map((b) => `<span class="pl-routine">${toMin(b.start) % 60 || h !== Math.floor(toMin(b.start) / 60) ? `<small>${clock(b.start)}</small> ` : ''}${esc(b.label)}</span>`).join('');
+}
+
+function routineSection() {
+  const r = P().routine;
+  const bl = blocks();
+  const total = bl.reduce((n, b) => n + (b.mins || 0), 0);
+  const mo = live(P().monthly).sort((a, b) => a.day - b.day);
+  const nth = (d) => `${d}${d % 100 >= 11 && d % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][d % 10] || 'th'}`;
+  return `
+    <div class="card section rise pl-std">
+      <div class="pl-std-head"><div><div class="eyebrow">My standard day</div>${bl.length ? `<small class="muted">${bl.length} block${bl.length > 1 ? 's' : ''} · ${dur(total)} planned</small>` : ''}</div>
+        <button class="btn small" data-pl="r-add">${ico(I.plus)} Add</button></div>
+      ${bl.length ? `<div class="pl-blocks">${bl.map((b) => `<button class="pl-block" data-pl="r-edit" data-id="${b.id}">
+          <span class="pl-btime">${clock(b.start)}<small>${clock(fromMin(toMin(b.start) + (b.mins || 0)))}</small></span>
+          <span class="pl-bdur">${dur(b.mins || 0)}</span>
+          <span class="pl-blabel">${esc(b.label)}</span></button>`).join('')}</div>`
+        : `<p class="help" style="margin:10px 0 4px">Write down your usual day in blocks, like “5:00 am · 15 min · Worship, pray, devotion”.</p>`}
+      <div class="pl-std-opts">
+        <span class="muted" style="font-size:13px">On</span>
+        <div class="pl-wdays">${DAYS_SHORT.map((d, i) => `<button class="${r.days.includes(i) ? 'on' : ''}" data-pl="r-day" data-d="${i}" aria-pressed="${r.days.includes(i)}">${esc(d.slice(0, 2))}</button>`).join('')}</div>
+      </div>
+      <div class="item pl-std-show"><div class="t"><b>Show in my week</b><span>Faint lines in the week grid, so you plan around them</span></div>
+        <button class="switch ${r.show ? 'on' : ''}" data-pl="r-show" aria-label="Show standard day in week grid"></button></div>
+    </div>
+    <div class="card section rise pl-std">
+      <div class="eyebrow">My standard week</div>
+      <div class="pl-sweek">${DAYS_SHORT.map((d, i) => `<label><span>${esc(d)}</span><textarea rows="1" data-sw="${i}" placeholder="e.g. 1h Bible study" maxlength="300">${esc(r.week[i])}</textarea></label>`).join('')}</div>
+    </div>
+    <div class="card section rise pl-std">
+      <div class="pl-std-head"><div class="eyebrow">My standard month</div><button class="btn small" data-pl="mo-add">${ico(I.plus)} Add</button></div>
+      ${mo.length ? `<div class="pl-blocks">${mo.map((x) => `<button class="pl-block mo" data-pl="mo-edit" data-id="${x.id}"><span class="pl-btime">Every<small>${nth(x.day)}</small></span><span class="pl-blabel">${esc(x.text)}</span></button>`).join('')}</div>`
+        : `<p class="help" style="margin:10px 0 4px">Things on the same date every month, like “10th · Tithes”. They show in the month view.</p>`}
+    </div>`;
+}
+
+function blockSheet(id) {
+  const b = id ? rec(P().routine.blocks, id) : null;
+  const bl = blocks();
+  const start = b?.start || (bl.length ? fromMin(toMin(bl[bl.length - 1].start) + (bl[bl.length - 1].mins || 0)) : '05:00');
+  const mins = b?.mins || 15;
+  const opts = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240, 300, 360, 420, 480, 540, 600];
+  if (!opts.includes(mins)) opts.push(mins);
+  sheet(`
+    <div class="eyebrow">${b ? 'Edit block' : 'Add to my standard day'}</div>
+    <form data-blockform autocomplete="off" style="margin-top:12px">
+      <input class="field" id="rb-label" type="text" placeholder="What? e.g. Worship, pray, devotion" maxlength="80" value="${esc(b?.label || '')}" style="margin:0 0 10px">
+      <div class="pl-brow">
+        <label><small>Starts</small><input class="field" id="rb-start" type="time" value="${start}" style="margin:0"></label>
+        <label><small>For</small><select class="field" id="rb-mins" style="margin:0">${opts.sort((x, y) => x - y).map((n) => `<option value="${n}" ${n === mins ? 'selected' : ''}>${dur(n)}</option>`).join('')}</select></label>
+      </div>
+      <p class="help" id="rb-end" style="margin:8px 0 0"></p>
+      <button class="btn primary block" type="submit" style="margin-top:12px">${b ? 'Save' : 'Add'}</button>
+    </form>
+    ${b ? `<button class="btn block" data-del style="margin-top:8px">Remove</button>` : ''}`, (o, close) => {
+    const end = () => { o.querySelector('#rb-end').textContent = `Until ${clock(fromMin(toMin(o.querySelector('#rb-start').value) + +o.querySelector('#rb-mins').value))}`; };
+    end(); o.querySelector('#rb-start').addEventListener('input', end); o.querySelector('#rb-mins').addEventListener('change', end);
+    if (!b) setTimeout(() => o.querySelector('#rb-label').focus(), 250);
+    o.querySelector('[data-blockform]').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const label = o.querySelector('#rb-label').value.trim();
+      if (!label) { o.querySelector('#rb-label').focus(); return; }
+      const f = { label, start: o.querySelector('#rb-start').value || start, mins: +o.querySelector('#rb-mins').value };
+      if (b) touch(b, f); else { const t = now(); P().routine.blocks.push({ id: uid(), ...f, createdAt: t, updatedAt: t, deleted: false }); save(); }
+      close(); rerender();
+    });
+    o.querySelector('[data-del]')?.addEventListener('click', () => { touch(b, { deleted: true }); close(); rerender(); });
+  });
+}
+
+function monthlySheet(id) {
+  const x = id ? rec(P().monthly, id) : null;
+  sheet(`
+    <div class="eyebrow">${x ? 'Edit' : 'Add to my standard month'}</div>
+    <form data-moform autocomplete="off" style="margin-top:12px">
+      <input class="field" id="mo-text" type="text" placeholder="What? e.g. Tithes" maxlength="80" value="${esc(x?.text || '')}" style="margin:0 0 10px">
+      <label class="pl-brow"><small>Every month on day</small><select class="field" id="mo-day" style="margin:0">${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}" ${(x?.day || 1) === i + 1 ? 'selected' : ''}>${i + 1}${i + 1 > 28 ? ' (or the last day)' : ''}</option>`).join('')}</select></label>
+      <button class="btn primary block" type="submit" style="margin-top:12px">${x ? 'Save' : 'Add'}</button>
+    </form>
+    ${x ? `<button class="btn block" data-del style="margin-top:8px">Remove</button>` : ''}`, (o, close) => {
+    if (!x) setTimeout(() => o.querySelector('#mo-text').focus(), 250);
+    o.querySelector('[data-moform]').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = o.querySelector('#mo-text').value.trim();
+      if (!text) { o.querySelector('#mo-text').focus(); return; }
+      const f = { text, day: +o.querySelector('#mo-day').value };
+      if (x) touch(x, f); else { const t = now(); P().monthly.push({ id: uid(), ...f, createdAt: t, updatedAt: t, deleted: false }); save(); }
+      close(); rerender();
+    });
+    o.querySelector('[data-del]')?.addEventListener('click', () => { touch(x, { deleted: true }); close(); rerender(); });
   });
 }
