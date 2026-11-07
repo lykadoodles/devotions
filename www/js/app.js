@@ -1465,10 +1465,10 @@ function viewSettings() {
     </div>
 
     <div class="section">
-      <div class="section-head"><div class="h2">Weekly planner</div></div>
+      <div class="section-head"><div class="h2">Planner</div></div>
       <div class="list">
-        <div class="item"><div class="t"><b>Show the planner</b><span>Week at a glance, with each day’s readings</span></div>
-          <button class="switch ${Planner.enabled() ? 'on' : ''}" data-action="planner-toggle" aria-label="Toggle weekly planner"></button></div>
+        <div class="item"><div class="t"><b>Show the planner</b><span>Week and month at a glance, around your daily readings</span></div>
+          <button class="switch ${Planner.enabled() ? 'on' : ''}" data-action="planner-toggle" aria-label="Toggle the planner"></button></div>
         ${Planner.enabled() ? `<div class="item"><div class="t"><b>Hours</b><span>Rows shown in the week grid</span></div>
           <select id="pl-from">${range(4, 12).map((h) => `<option value="${h}" ${state.planner.from === h ? 'selected' : ''}>${h === 12 ? '12 nn' : `${h} am`}</option>`).join('')}</select>
           <select id="pl-to">${range(15, 23).map((h) => `<option value="${h}" ${state.planner.to === h ? 'selected' : ''}>${h - 12} pm</option>`).join('')}</select></div>
@@ -1537,8 +1537,8 @@ function viewWelcome() {
         </div>
         <input class="field" style="margin:0" id="wstart" type="date" value="${t}" hidden>
         <div class="welcome-opt">
-          <div class="t"><b>🗓️ Weekly planner <small>optional</small></b><span>Plan your week and month around your daily readings: to-dos, goals, your routine and birthdays. You can change this later in Settings.</span></div>
-          <button class="switch" id="wplanner" data-action="wplanner" role="switch" aria-checked="false" aria-label="Turn on the weekly planner"></button>
+          <div class="t"><b>🗓️ Planner <small>optional</small></b><span>Plan your week and month around your daily readings: to-dos, goals, your routine and birthdays. You can change this later in Settings.</span></div>
+          <button class="switch" id="wplanner" data-action="wplanner" role="switch" aria-checked="false" aria-label="Turn on the planner"></button>
         </div>
         <button class="btn primary block" data-action="begin" style="margin-top:8px">${icon('flame').replace('<svg', '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"')} Light the lamp</button>
         <button class="restore-link" data-action="import">Coming from another phone? <b>Restore a backup</b></button>
