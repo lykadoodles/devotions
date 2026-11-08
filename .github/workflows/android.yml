@@ -73,6 +73,38 @@ jobs:
               -dname "CN=Lamp, O=Lykadoodles, C=PH"
           fi
 
+      # Keep Gradle and its downloads between builds, so a GitHub download
+      # outage can't block a build once these are cached.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/wrapper
+            ~/.gradle/caches
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'package-lock.json') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      # Gradle's own download now lives on GitHub releases; if those are timing
+      # out, fetch the same Gradle zip from a mirror instead.
+      - name: Choose where to download Gradle from
+        working-directory: android
+        run: |
+          P=gradle/wrapper/gradle-wrapper.properties
+          URL=$(grep distributionUrl $P | cut -d= -f2- | sed 's#\\:#:#g')
+          ZIP=$(basename "$URL")
+          echo "Gradle: $URL"
+          if ls ~/.gradle/wrapper/dists/*/*/"$ZIP" >/dev/null 2>&1 || curl -sfL -r 0-0 --max-time 30 -o /dev/null "$URL"; then
+            echo "Using the usual Gradle download (or the cache)"
+          else
+            for M in "https://mirrors.cloud.tencent.com/gradle/$ZIP" "https://mirrors.aliyun.com/gradle/distributions/$ZIP"; do
+              if curl -sfL -r 0-0 --max-time 30 -o /dev/null "$M"; then
+                echo "GitHub download unavailable; using mirror $M"
+                sed -i "s#^distributionUrl=.*#distributionUrl=$(echo "$M" | sed 's#:#\\\\:#')#" $P
+                break
+              fi
+            done
+          fi
+          grep distributionUrl $P
+
       - name: Build APK
         working-directory: android
         env:
