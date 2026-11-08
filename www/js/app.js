@@ -576,7 +576,7 @@ function plSheet(html) {
 }
 
 function viewCatchup() {
-  const miss = ahead ? [] : missed();
+  const miss = missed();
   const groups = {};
   for (const m of miss) (groups[m.date] ||= []).push(m);
   const dates = Object.keys(groups).sort().reverse();
