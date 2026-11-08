@@ -102,6 +102,20 @@ jobs:
                 break
               fi
             done
+            # Maven Central hands some big files (like the Kotlin compiler) to GitHub
+            # storage too; read libraries from Google's full copy of Maven Central instead.
+            mkdir -p ~/.gradle/init.d
+            cat > ~/.gradle/init.d/central-mirror.gradle <<'GRADLE'
+          def MIRROR = 'https://maven-central.storage-download.googleapis.com/maven2/'
+          def useMirror = { repos ->
+            repos.configureEach { r ->
+              if (r instanceof MavenArtifactRepository && r.url.toString().startsWith('https://repo.maven.apache.org/maven2')) r.url = MIRROR
+            }
+          }
+          beforeSettings { s -> useMirror(s.pluginManagement.repositories); useMirror(s.dependencyResolutionManagement.repositories) }
+          allprojects { useMirror(buildscript.repositories); useMirror(repositories) }
+          GRADLE
+            echo "Libraries: Google's Maven Central mirror"
           fi
           grep distributionUrl $P
 
