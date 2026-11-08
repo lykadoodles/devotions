@@ -74,7 +74,20 @@ function removed(n) {
   if (n instanceof HTMLElement && n.dataset.locked) { delete n.dataset.locked; unlock(); }
 }
 
+// Android: tapping a button while typing first closes the keyboard, the layout
+// jumps, and the tap lands on nothing. For a form's own buttons (Add, Save...),
+// keep focus in the field so the keyboard stays put and the tap goes through.
+function keepKeyboard(e) {
+  const btn = e.target.closest('button');
+  const f = document.activeElement;
+  if (!btn || !f || !f.matches('input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea')) return;
+  const form = btn.form || btn.closest('form');
+  if (form && form.contains(f)) e.preventDefault();
+}
+
 export function initSheets() {
+  document.addEventListener('pointerdown', keepKeyboard, true);
+  document.addEventListener('mousedown', keepKeyboard, true);
   new MutationObserver((muts) => {
     for (const m of muts) { m.addedNodes.forEach(added); m.removedNodes.forEach(removed); }
   }).observe(document.body, { childList: true });

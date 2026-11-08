@@ -254,7 +254,7 @@ export function render(weekParam, openId) {
 
 // Goal cells grow with their text, like writing on more lines of the page
 function fitGoalBoxes() {
-  document.querySelectorAll('.pl-grow textarea').forEach((el) => { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; });
+  { const y = scrollY; document.querySelectorAll('.pl-grow textarea').forEach((el) => { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }); scrollTo(0, y); }
 }
 addEventListener('resize', fitGoalBoxes);
 
@@ -448,14 +448,14 @@ document.addEventListener('submit', (e) => {
 document.addEventListener('input', (e) => {
   if (!onPlanner()) return;
   const mg = e.target.closest('[data-mg]');
-  if (mg) { const g = rec(P().monthGoals, mg.dataset.mg); if (g) { g.text = mg.value; g.updatedAt = now(); } mg.style.height = 'auto'; mg.style.height = `${mg.scrollHeight}px`; clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); return; }
+  if (mg) { const g = rec(P().monthGoals, mg.dataset.mg); if (g) { g.text = mg.value; g.updatedAt = now(); } { const y = scrollY; mg.style.height = 'auto'; mg.style.height = `${mg.scrollHeight}px`; scrollTo(0, y); } clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); return; }
   const sw = e.target.closest('[data-sw]');
-  if (sw) { const r = P().routine; r.week[+sw.dataset.sw] = sw.value; r.updatedAt = now(); sw.style.height = 'auto'; sw.style.height = `${sw.scrollHeight}px`; clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); return; }
+  if (sw) { const r = P().routine; r.week[+sw.dataset.sw] = sw.value; r.updatedAt = now(); { const y = scrollY; sw.style.height = 'auto'; sw.style.height = `${sw.scrollHeight}px`; scrollTo(0, y); } clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); return; }
 });
 document.addEventListener('input', (e) => {
   const el = e.target.closest('[data-plf]');
   if (!el || !onPlanner()) return;
-  if (el.tagName === 'TEXTAREA') { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
+  if (el.tagName === 'TEXTAREA') { const y = scrollY; el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; scrollTo(0, y); }
   const g = goalById(el.dataset.id);
   if (!g) return;
   Object.assign(g, { [el.dataset.plf]: el.value, updatedAt: now() });

@@ -121,13 +121,36 @@ function editor(n) {
       </div>
     </div>`;
   const body = deps.app.querySelector('#nb-body');
-  const grow = () => { body.style.height = 'auto'; body.style.height = `${Math.max(body.scrollHeight, window.innerHeight * 0.45)}px`; };
-  grow();
-  document.fonts?.ready.then(grow);
+  grow(body, false);
+  document.fonts?.ready.then(() => grow(body, false));
   if (isEmpty(n)) setTimeout(() => deps.app.querySelector(n.kind === 'letter' ? '#nb-body' : '#nb-title')?.focus(), 300);
 }
 
 const onNotebook = () => location.hash.startsWith('#/notebook');
+
+// Grow the page with the text without the screen jumping: measuring a textarea
+// briefly shrinks it, which used to scroll the page and hide the line being typed.
+// Then make sure the line being typed sits above the keyboard.
+function grow(el, follow) {
+  const y = window.scrollY;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+  window.scrollTo(0, y);
+  if (!follow) return;
+  const vv = window.visualViewport;
+  const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+  // where the caret is: measure the text before it with a hidden twin
+  const twin = document.createElement('div');
+  const cs = getComputedStyle(el);
+  for (const k of ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'paddingTop', 'paddingLeft', 'paddingRight', 'boxSizing']) twin.style[k] = cs[k];
+  Object.assign(twin.style, { position: 'absolute', visibility: 'hidden', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', width: `${el.clientWidth}px`, left: '-9999px', top: '0' });
+  twin.textContent = el.value.slice(0, el.selectionEnd ?? el.value.length) + '\u200b';
+  document.body.appendChild(twin);
+  const caretY = el.getBoundingClientRect().top + twin.scrollHeight;
+  twin.remove();
+  const lh = parseFloat(cs.lineHeight) || 30;
+  if (caretY > viewBottom - lh * 0.6) window.scrollBy(0, caretY - viewBottom + lh * 1.6);
+}
 
 document.addEventListener('input', (e) => {
   if (!onNotebook()) return;
@@ -142,7 +165,7 @@ document.addEventListener('input', (e) => {
   const n = current && byId(current);
   if (!el || !n) return;
   n[el.dataset.nbf] = el.value; n.updatedAt = now();
-  if (el.id === 'nb-body') { el.style.height = 'auto'; el.style.height = `${Math.max(el.scrollHeight, window.innerHeight * 0.45)}px`; }
+  if (el.id === 'nb-body') grow(el, true);
   clearTimeout(timer);
   timer = setTimeout(() => {
     timer = 0; save();
