@@ -882,7 +882,9 @@ function voiceLabel(v, i, chip = false) {
   const region = REGION[(v.lang || '').split(/[-_]/)[1]?.toUpperCase()] || '';
   const where = /network/i.test(v.name || v.voiceURI || '') ? 'needs internet' : 'offline';
   const g = Audio.genderOf(v);
-  return { title: `Voice ${i + 1}${g && !chip ? ` · ${g === 'm' ? 'Male' : 'Female'}` : ''}`, sub: `${region ? `${region} accent · ` : ''}${where}` };
+  // the voice's own code (e.g. en-au-x-aub), the same on every phone: lets testers report a voice exactly
+  const code = (v.name || v.voiceURI || '').replace(/[-_](local|network)$/i, '');
+  return { title: `Voice ${i + 1}${g && !chip ? ` · ${g === 'm' ? 'Male' : 'Female'}` : ''}`, sub: `${region ? `${region} accent · ` : ''}${where}${code ? ` · ${code}` : ''}` };
 }
 async function currentVoiceName(key) {
   const want = state.voices?.[key];
