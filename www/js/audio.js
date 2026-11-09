@@ -44,13 +44,17 @@ export async function voices() {
   return voiceCache;
 }
 export const langKey = (l) => (/^(fil|tl)/i.test(l) ? 'fil' : 'en');
-// Indian English voices are left out of the choices (testers asked for this).
-const isIndian = (v) => /^en[-_]IN\b/i.test(v.lang || '') || /^en-in-/i.test(v.name || v.voiceURI || '');
-export const voicesFor = async (key) => (await voices()).filter((v) => (key === 'fil' ? /^(fil|tl)/i : /^en/i).test(v.lang || '') && !isIndian(v));
+// English choices are kept to US and UK voices (enough variety, and their
+// male/female voices are all known). Filipino voices are all listed.
+// a voice picked before Australian/Nigerian/Indian voices were removed falls back to the default
+const hidden = (v) => /^en/i.test(v.lang || '') && !usOrUk(v);
+const usOrUk = (v) => /^en[-_](US|GB)\b/i.test(v.lang || '') || /^en-(us|gb)-/i.test(v.name || v.voiceURI || '');
+export const voicesFor = async (key) => (await voices()).filter((v) => (key === 'fil' ? /^(fil|tl)/i.test(v.lang || '') : /^en/i.test(v.lang || '') && usOrUk(v)));
 async function chosenVoice(l) {
   const want = state.voices?.[langKey(l)];
   if (!want) return null;
-  return (await voices()).find((v) => v.voiceURI === want || v.name === want) || null;
+  const v = (await voices()).find((x) => x.voiceURI === want || x.name === want) || null;
+  return v && hidden(v) ? null : v;
 }
 export function setVoice(key, v, role = 'narrator') {
   const id = v ? (v.voiceURI || v.name) : '';
@@ -115,7 +119,8 @@ const ROLE_TONE = {
 };
 async function voiceFor(key, role) {
   const id = voiceIdFor(key, role);
-  return id ? (await voices()).find((v) => v.voiceURI === id || v.name === id) || null : null;
+  const v = id ? (await voices()).find((x) => x.voiceURI === id || x.name === id) || null : null;
+  return v && hidden(v) ? null : v;
 }
 async function rolePlan(key, role) {
   if (role === 'narrator') return { v: await voiceFor(key, 'narrator'), pitch: 1, rate: 1 };
