@@ -44,7 +44,9 @@ export async function voices() {
   return voiceCache;
 }
 export const langKey = (l) => (/^(fil|tl)/i.test(l) ? 'fil' : 'en');
-export const voicesFor = async (key) => (await voices()).filter((v) => (key === 'fil' ? /^(fil|tl)/i : /^en/i).test(v.lang || ''));
+// Indian English voices are left out of the choices (testers asked for this).
+const isIndian = (v) => /^en[-_]IN\b/i.test(v.lang || '') || /^en-in-/i.test(v.name || v.voiceURI || '');
+export const voicesFor = async (key) => (await voices()).filter((v) => (key === 'fil' ? /^(fil|tl)/i : /^en/i).test(v.lang || '') && !isIndian(v));
 async function chosenVoice(l) {
   const want = state.voices?.[langKey(l)];
   if (!want) return null;
@@ -62,7 +64,19 @@ export const dramaOn = () => state.drama !== false;
 // Male or female? Phones don't say, so: the reader's own tag first, then
 // voice names that give it away (Samsung "SMTf00"/"SMTm00", "… Male"/"… Female",
 // and a few Google voice codes known for sure). Otherwise unknown ('').
-const KNOWN = { iom: 'm', tpd: 'm', rjs: 'm', sfg: 'f', gba: 'f' };
+// Google's voice codes are the same on every Android phone. These are the
+// English voices whose sex is known (consistent with a tester's full list).
+// Anything else stays untagged until the reader tags it.
+const KNOWN = {
+  // English (US)
+  iob: 'f', iog: 'f', iol: 'm', iom: 'm', sfg: 'f', tpc: 'f', tpd: 'm', tpf: 'f',
+  // English (UK)
+  gba: 'f', gbb: 'm', gbc: 'f', gbd: 'm', gbg: 'f', rjs: 'm',
+  // English (Australia)
+  aua: 'f', aub: 'm', auc: 'f', aud: 'm',
+};
+// Each accent's default voice ("en-US-language" and so on)
+const DEFAULT_VOICE = { 'en-us': 'm', 'en-gb': 'f', 'en-au': 'f', 'en-ng': 'f', 'en-in': 'f' };
 export function genderOf(v) {
   if (!v) return '';
   const id = v.voiceURI || v.name || '';
@@ -73,6 +87,7 @@ export function genderOf(v) {
   if (/\bfemale\b|\bwoman\b/.test(n)) return 'f';
   if (/\bmale\b|\bman\b/.test(n)) return 'm';
   const code = n.match(/-x-([a-z]{3})(?:-|\b)/); if (code && KNOWN[code[1]]) return KNOWN[code[1]];
+  const lang = n.match(/\b([a-z]{2,3}[-_][a-z]{2})[-_]language\b/); if (lang && DEFAULT_VOICE[lang[1].replace('_', '-')]) return DEFAULT_VOICE[lang[1].replace('_', '-')];
   return '';
 }
 // Tagging a voice: if it was picked for the other sex's role, that role goes back to Automatic
