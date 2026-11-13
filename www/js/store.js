@@ -73,7 +73,12 @@ export function replaceAll(s) {
   save();
 }
 
+// Things that follow every save (home-screen widgets)
+const saveHooks = [];
+export const onSave = (fn) => saveHooks.push(fn);
+
 export function save() {
+  saveHooks.forEach((fn) => { try { fn(); } catch {} });
   const s = JSON.stringify(state);
   try { localStorage.setItem(KEY, s); } catch {}
   try { prefs()?.set({ key: KEY, value: s }); } catch {}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="lamp_widget_verse">Verse of the day</string>
+    <string name="lamp_widget_verse_desc">Today’s verse, with a share button</string>
+    <string name="lamp_widget_reading">Today’s reading</string>
+    <string name="lamp_widget_reading_desc">Your four readings for today and your streak</string>
+    <string name="lamp_widget_prayer">Prayer list</string>
+    <string name="lamp_widget_prayer_desc">Your prayer requests; + adds a new one</string>
+    <string name="lamp_widget_tasks">To-do</string>
+    <string name="lamp_widget_tasks_desc">Planner to-dos; tick them right on your home screen</string>
+</resources>

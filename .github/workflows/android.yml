@@ -58,6 +58,34 @@ jobs:
           open(p, 'w').write(s)
           PY
 
+      # Home-screen widgets (verse of the day, today's reading, prayer list,
+      # to-dos). The Android project is generated fresh each build, so the
+      # widget code lives in scripts/android/widgets and is copied in here.
+      - name: Add home-screen widgets
+        run: |
+          SRC=scripts/android/widgets
+          APP=android/app/src/main
+          PKG=$APP/java/com/lykadoodles/lamp
+          mkdir -p $PKG
+          cp $SRC/java/*.java $PKG/
+          for d in layout xml drawable values; do mkdir -p $APP/res/$d; cp $SRC/res/$d/* $APP/res/$d/; done
+          python3 - <<'PY'
+          p = 'android/app/src/main/AndroidManifest.xml'
+          s = open(p).read()
+          def receiver(name, info, extra=''):
+              return (f'        <receiver android:name=".{name}" android:exported="false" android:label="@string/lamp_widget_{info}">\n'
+                      f'            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" />{extra}</intent-filter>\n'
+                      f'            <meta-data android:name="android.appwidget.provider" android:resource="@xml/lamp_widget_{info}" />\n'
+                      f'        </receiver>\n')
+          r = (receiver('VerseWidget', 'verse') + receiver('ReadingWidget', 'reading') +
+               receiver('PrayerWidget', 'prayer') + receiver('TasksWidget', 'tasks'))
+          if 'VerseWidget' not in s:
+              s = s.replace('</application>', r + '    </application>', 1)
+          open(p, 'w').write(s)
+          PY
+          grep -c "Widget\"" $APP/AndroidManifest.xml
+          ls $PKG
+
       - name: Restore signing key
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}

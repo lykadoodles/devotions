@@ -3,7 +3,7 @@ import {
   planDayFor, readingsFor, readingFor, label, verseCount, minutes, proverbsChapters,
   BOOK_TOTALS, BOOK_DAYS, DAY_BOOK_VERSES, TOTAL_VERSES, chapters, bookName,
 } from './plan.js';
-import { state, load, save, reset, isDone, setDone, streak, longestStreak, isLit, LIT, setLitHook } from './store.js';
+import { state, load, save, onSave, reset, isDone, setDone, streak, longestStreak, isLit, LIT, setLitHook } from './store.js';
 import { passage, prefetch, savedCount, testKey, hasBuiltInKey, hasKey, verseText, verseTextOnline, verseTextSaved, wantsOnline, TRACK_SPOKEN, NOTICES, TRANSLATIONS, TRANSLATION_ORDER, current as currentTranslation } from './text.js';
 import { rhemaRange, dailyIndex, randomIndex } from './rhema.js';
 import { loadDevo, devoFor } from './devo.js';
@@ -16,6 +16,7 @@ import * as Audio from './audio.js';
 import { openCardMaker } from './sharecard.js';
 import { initSheets } from './sheets.js';
 import * as Notebook from './notebook.js';
+import * as Widgets from './widgets.js';
 import * as Planner from './planner.js';
 
 const $app = document.getElementById('app');
@@ -2166,4 +2167,28 @@ document.addEventListener('visibilitychange', () => {
   scheduleReminders();
   // Tapping a notification opens the right screen
   try { P().LocalNotifications?.addListener('localNotificationActionPerformed', (e) => { const r = e.notification?.extra?.route; if (r && location.hash !== r) location.hash = r; }); } catch {}
+  // Home-screen widgets: keep their summary fresh, apply ticks made on them,
+  // and open the screen a widget was tapped for
+  onSave(() => Widgets.refresh());
+  window.lampOpen = openFromWidget;
+  await Widgets.applyPending(openFromWidget);
+  Widgets.refresh(300);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { Widgets.applyPending(openFromWidget); Widgets.refresh(300); } });
 })();
+
+function openFromWidget(r) {
+  if (!r) return;
+  if (r === 'add-prayer') {
+    if (location.hash !== '#/prayer') location.hash = '#/prayer';
+    setTimeout(() => document.getElementById('pl-text')?.focus(), 350);
+    return;
+  }
+  if (r === 'add-todo') {
+    if (!Planner.enabled()) { location.hash = '#/settings'; return; }
+    if (!location.hash.startsWith('#/planner')) location.hash = '#/planner';
+    setTimeout(() => document.querySelector('[data-pl="tab"][data-tab="week"]')?.click(), 250);
+    setTimeout(() => document.querySelector('[data-pl="quick"]')?.click(), 500);
+    return;
+  }
+  if (location.hash !== r) location.hash = r;
+}

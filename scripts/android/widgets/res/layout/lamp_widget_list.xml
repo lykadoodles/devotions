@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reading, prayer list and to-do widgets: a heading with an optional +, then rows. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/lamp_w_bg"
+    android:orientation="vertical"
+    android:paddingStart="18dp"
+    android:paddingTop="14dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="10dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/w_head"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:drawableEnd="@drawable/lamp_w_chev"
+            android:drawablePadding="4dp"
+            android:gravity="center_vertical"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:text="TODAY’S READING"
+            android:textColor="#FFFFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.05" />
+
+        <TextView
+            android:id="@+id/w_sub"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:singleLine="true"
+            android:text="Day 1"
+            android:textColor="#FFB0BBDD"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/w_add"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:padding="6dp"
+            android:contentDescription="Add"
+            android:src="@drawable/lamp_w_add" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/w_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- preview rows (replaced when the widget is drawn) -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:drawableStart="@drawable/lamp_w_check"
+            android:drawablePadding="12dp"
+            android:gravity="center_vertical"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp"
+            android:text="Genesis 1–2"
+            android:textColor="#99C9D2F0"
+            android:textSize="16sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:drawableStart="@drawable/lamp_w_circle"
+            android:drawablePadding="12dp"
+            android:gravity="center_vertical"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp"
+            android:text="Matthew 1"
+            android:textColor="#FFF3F5FF"
+            android:textSize="16sp" />
+    </LinearLayout>
+</LinearLayout>
