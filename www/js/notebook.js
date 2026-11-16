@@ -29,6 +29,9 @@ let query = '';
 
 const BOOK_ICON = '<svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>';
 const BACK = '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>';
+const SHARE = '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>';
+const TRASH = '<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/></svg>';
+const CAL = '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>';
 
 export function render(a, b) {
   if (a === 'new') {
@@ -101,24 +104,23 @@ function editor(n) {
   deps.tabs.hidden = true;
   const k = KINDS[n.kind] || KINDS.note;
   deps.app.innerHTML = `
-    <header class="top nb-top">
-      <a class="icon-btn" href="#/notebook" aria-label="Back to notebook">${BACK}</a>
-      <div class="seg-ctl nb-kinds">${Object.entries(KINDS).map(([key, v]) => `<button class="${n.kind === key ? 'on' : ''}" data-nb="kind" data-k="${key}" title="${esc(v.name)}">${v.icon}<span>${esc(v.short)}</span></button>`).join('')}</div>
+    <header class="nb-bar">
+      <a class="nb-ibtn" href="#/notebook" aria-label="Back to notebook">${BACK}</a>
+      <span class="nb-crumb">Notebook</span>
+      <button class="nb-ibtn" data-nb="share" aria-label="Share">${SHARE}</button>
+      <button class="nb-ibtn" data-nb="delete" aria-label="Delete">${TRASH}</button>
     </header>
     <div class="nb-editor">
       <input class="nb-title" id="nb-title" data-nbf="title" type="text" placeholder="${esc(k.title)}" value="${esc(n.title)}" maxlength="140" autocomplete="off">
+      <div class="nb-kinds" role="radiogroup" aria-label="Kind of page">${Object.entries(KINDS).map(([key, v]) => `<button class="nb-kchip ${n.kind === key ? 'on' : ''}" data-nb="kind" data-k="${key}" role="radio" aria-checked="${n.kind === key}"><span aria-hidden="true">${v.icon}</span>${esc(v.short)}</button>`).join('')}</div>
       <div class="nb-meta">
-        <input type="date" data-nbf="date" value="${esc(n.date || today())}" aria-label="Date">
-        ${n.kind === 'sermon' ? `<input type="text" data-nbf="speaker" placeholder="Speaker" value="${esc(n.speaker)}" maxlength="80" autocomplete="off">
-        <input type="text" data-nbf="place" placeholder="Church or event" value="${esc(n.place)}" maxlength="80" autocomplete="off">` : ''}
+        <label class="nb-date">${CAL}<input type="date" data-nbf="date" value="${esc(n.date || today())}" aria-label="Date"></label>
+        ${n.kind === 'sermon' ? `<input class="nb-mfield" type="text" data-nbf="speaker" placeholder="Speaker" value="${esc(n.speaker)}" maxlength="80" autocomplete="off">
+        <input class="nb-mfield" type="text" data-nbf="place" placeholder="Church or event" value="${esc(n.place)}" maxlength="80" autocomplete="off">` : ''}
       </div>
       <textarea class="nb-body" id="nb-body" data-nbf="body" placeholder="${esc(k.body)}">${esc(n.body)}</textarea>
       <div id="nb-refs">${refChips(`${n.title}\n${n.body}`)}</div>
-      <div class="nb-actions">
-        <span class="muted nb-saved" id="nb-saved">${n.body || n.title ? 'Saved on this phone' : ''}</span>
-        <button class="btn small" data-nb="share">Share</button>
-        <button class="btn small" data-nb="delete">Delete</button>
-      </div>
+      <p class="nb-saved" id="nb-saved">${n.body || n.title ? 'Saved on this phone' : ''}</p>
     </div>`;
   const body = deps.app.querySelector('#nb-body');
   grow(body, false);
