@@ -2084,7 +2084,7 @@ document.addEventListener('click', async (e) => {
       <div class="eyebrow">Restore backup</div>
       <div class="h1">${m.name ? `${esc(m.name)}’s Lamp` : 'Lamp backup'}</div>
       <p class="muted" style="margin:4px 0 12px">${when ? `Saved ${esc(when)} · ` : ''}plan started ${esc(fmtDate(m.startDate, { month: 'short', day: 'numeric', year: 'numeric' }))}</p>
-      <ul class="restore-sum">${row(m.readings, 'reading')}${row(m.fullDays, 'full day')}${row(m.highlights, 'highlighted verse')}${row(m.notes, 'heart note')}${row(m.reactions, 'reaction')}${row(m.prayers, 'prayer request')}${row(m.plans, 'planner item')}${row(m.goals, 'weekly goal')}${row(m.birthdays, 'birthday')}</ul>
+      <ul class="restore-sum">${row(m.readings, 'reading')}${row(m.fullDays, 'full day')}${row(m.highlights, 'highlighted verse')}${row(m.notes, 'heart note')}${row(m.reactions, 'reaction')}${row(m.prayers, 'prayer request')}${row(m.pages, 'notebook page')}${row(m.plans, 'planner item')}${row(m.goals, 'weekly goal')}${row(m.birthdays, 'birthday')}</ul>
       <p style="margin:12px 0 16px">This replaces everything currently in Lamp on this phone.</p>
       <button class="btn primary block" data-action="restore-confirm">Restore</button>
       <button class="btn block" data-close style="margin-top:8px">Cancel</button>`);
@@ -2092,7 +2092,7 @@ document.addEventListener('click', async (e) => {
   if (a === 'restore-confirm' && pendingRestore) {
     const b = pendingRestore; pendingRestore = null;
     viewSettings.closeRestore?.();
-    Backup.restore(b.data);
+    await Backup.restore(b.data, b.images);
     if (b.exportedAt) { state.lastBackup = b.exportedAt; save(); }
     applyTheme(); scheduleReminders(); route();
     haptic('success'); confetti(.5); toast('Welcome back! Your progress is restored');

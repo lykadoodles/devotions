@@ -3,22 +3,29 @@
 // Files…); in a browser it downloads. API keys are left out of the file.
 import { state, save, replaceAll } from './store.js';
 import { today } from './plan.js';
+import * as Images from './images.js';
 
 const SECRET = ['nltKey', 'esvKey'];
 const native = () => !!window.Capacitor?.isNativePlatform?.();
 
 export const fileName = () => `lamp-backup-${today()}.json`;
 
-export function backupJSON() {
+// Notebook images are saved as files, so the backup carries them along (base64)
+export async function backupJSON() {
   const data = JSON.parse(JSON.stringify(state));
   for (const k of SECRET) delete data[k];
   delete data.lastBackup;
-  return JSON.stringify({ app: 'lamp', kind: 'backup', version: 1, exportedAt: new Date().toISOString(), data }, null, 2);
+  const images = {};
+  for (const n of data.notebook || []) {
+    if (n.deleted) continue;
+    for (const im of n.images || []) { const b = await Images.read(im.id); if (b) images[im.id] = b; }
+  }
+  return JSON.stringify({ app: 'lamp', kind: 'backup', version: 1, exportedAt: new Date().toISOString(), data, images }, null, 2);
 }
 
 // Returns true when the backup was handed off (not cancelled)
 export async function exportBackup() {
-  const json = backupJSON();
+  const json = await backupJSON();
   if (native()) {
     const { Filesystem, Share } = window.Capacitor.Plugins;
     const { uri } = await Filesystem.writeFile({ path: fileName(), data: json, directory: 'CACHE', encoding: 'utf8' });
@@ -65,7 +72,7 @@ export function parseBackup(text) {
   if (!obj || typeof obj !== 'object') throw new Error('not json');
   const data = obj.app === 'lamp' && obj.data ? obj.data : obj;
   if (!data.done || typeof data.done !== 'object' || !data.startDate) throw new Error('not a lamp backup');
-  return { data, exportedAt: obj.exportedAt || null };
+  return { data, images: obj.images || null, exportedAt: obj.exportedAt || null };
 }
 
 export function summarize(data) {
@@ -79,13 +86,15 @@ export function summarize(data) {
     notes: (data.notes || []).length,
     reactions: Object.keys(data.reactions || {}).length,
     prayers: (data.prayers || []).length,
+    pages: (data.notebook || []).filter((x) => !x.deleted).length,
     plans: (data.planner?.items || []).filter((x) => !x.deleted).length,
     goals: (data.planner?.goals || []).filter((x) => !x.deleted && x.goal).length,
     birthdays: (data.planner?.birthdays || []).filter((x) => !x.deleted).length,
   };
 }
 
-export function restore(data) {
+export async function restore(data, images) {
   const keep = Object.fromEntries(SECRET.map((k) => [k, state[k]]));
+  if (images) await Images.restoreAll(images);
   replaceAll({ ...data, ...keep, onboarded: true });
 }

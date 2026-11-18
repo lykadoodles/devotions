@@ -1081,3 +1081,23 @@ label.pl-brow { grid-template-columns: 1fr; }
 .nb-editor { margin-top: 4px; }
 .nb-title { padding: 4px 0; }
 .nb-saved { margin: 16px 0 8px; font-size: 12px; color: var(--muted); text-align: center; min-height: 1em; }
+
+/* notebook images */
+.nb-addimg { cursor: pointer; }
+.nb-addimg span { font-size: 13px; font-weight: 600; }
+.nb-gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.nb-gallery:empty { display: none; }
+.nb-pic { display: block; padding: 0; border: 0; border-radius: 14px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, transparent); width: 100%; aspect-ratio: 1 / 1 !important; }
+.nb-pic:only-child { grid-column: 1 / -1; aspect-ratio: auto !important; max-height: 60vh; }
+.nb-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nb-pic:only-child img { object-fit: contain; max-height: 60vh; }
+.nb-editor.has-pics .nb-body { min-height: 7em; }
+.nb-pic.missing::after { content: 'Image not found'; display: grid; place-items: center; height: 100%; font-size: 12px; color: var(--muted); }
+.nb-card.has-pic { display: grid; grid-template-columns: 1fr 64px; column-gap: 12px; position: relative; }
+.nb-card.has-pic > :not(.nb-thumb):not(.nb-thumbn) { grid-column: 1; }
+.nb-thumb { grid-column: 2; grid-row: 1 / span 4; width: 64px; height: 64px; border-radius: 12px; object-fit: cover; background: color-mix(in srgb, var(--text) 8%, transparent); align-self: start; }
+.nb-thumbn { position: absolute; right: 18px; top: 60px; font-size: 11px; font-weight: 800; padding: 2px 6px; border-radius: 99px; background: rgba(0,0,0,.55); color: #fff; }
+.nb-viewer { display: flex; flex-direction: column; justify-content: center; background: rgba(0,0,0,.94); padding: 0; z-index: 90; }
+.nb-viewer img { max-width: 100%; max-height: calc(100dvh - 72px); object-fit: contain; margin: auto; touch-action: pinch-zoom; }
+.nb-vbar { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 4px; padding: calc(var(--safe-top, 0px) + 8px) 8px 8px; background: linear-gradient(rgba(0,0,0,.6), transparent); }
+.nb-vbar .nb-ibtn { color: #fff; }
