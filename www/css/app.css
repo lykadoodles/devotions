@@ -1101,3 +1101,5 @@ label.pl-brow { grid-template-columns: 1fr; }
 .nb-viewer img { max-width: 100%; max-height: calc(100dvh - 72px); object-fit: contain; margin: auto; touch-action: pinch-zoom; }
 .nb-vbar { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 4px; padding: calc(var(--safe-top, 0px) + 8px) 8px 8px; background: linear-gradient(rgba(0,0,0,.6), transparent); }
 .nb-vbar .nb-ibtn { color: #fff; }
+.seg-ctl.tst[hidden], .cont-read[hidden] { display: none; }
+.goto-hit { margin-top: 10px; }

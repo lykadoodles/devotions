@@ -1029,6 +1029,7 @@ const normName = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 let bookIndexCache = null;
 async function loadBookNames() {
   if (bookIndexCache) return bookIndexCache;
+  if (!META?.books) return null; // the Bible's book list isn't loaded yet; try again later
   const lists = [META.books.map((b) => b.name)];
   for (const code of ['tgl', 'ceb']) { try { lists.push(await (await fetch(`data/${code}/names.json`)).json()); } catch {} }
   bookIndexCache = [];
@@ -1090,6 +1091,7 @@ function findRefs(text) {
 
 function viewBible() {
   $tabs.hidden = false;
+  if (!bookIndexCache) loadBookNames().then(() => { const g = document.getElementById('goto'); if (g?.value) filterBible(g.value); }).catch(() => {});
   const read = planReadChapters();
   const [from, to] = bibleTestament === 'ot' ? [0, 38] : [39, 65];
   const last = state.lastFree && META.books[state.lastFree.b] ? state.lastFree : null;
@@ -1100,6 +1102,7 @@ function viewBible() {
       <button class="btn primary small" type="submit">Go</button>
     </form>
     <p class="help goto-err" id="goto-err" hidden></p>
+    <div id="goto-hit"></div>
     ${last ? `<a class="banner rise cont-read" href="${bibleHref(last.b, last.c)}">
       <div class="t"><b>Continue reading</b><span class="muted">${esc(label(freeRange(`${last.b}.${last.c}`)))} · ${esc(currentTranslation())}</span></div>
       <div class="icon-btn">${icon('arrow')}</div></a>` : ''}
@@ -1107,15 +1110,59 @@ function viewBible() {
       <button class="${bibleTestament === 'ot' ? 'on' : ''}" data-action="bible-tst" data-tst="ot">Old Testament</button>
       <button class="${bibleTestament === 'nt' ? 'on' : ''}" data-action="bible-tst" data-tst="nt">New Testament</button>
     </div>
-    <div class="book-grid rise">
-      ${META.books.slice(from, to + 1).map((bk, j) => {
-        const b = from + j, n = bk.verses.length;
-        let done = 0; for (let c = 1; c <= n; c++) if (read.has(`${b}.${c}`)) done++;
-        return `<a class="book-cell" href="${bibleHref(b)}"><b>${esc(bk.name)}</b><span>${n} ch</span><i style="width:${Math.round((done / n) * 100)}%"></i></a>`;
-      }).join('')}
-    </div>
+    <div class="book-grid rise" id="book-grid">${META.books.slice(from, to + 1).map((_, j) => bookCell(from + j, read)).join('')}</div>
     <p class="help" style="text-align:center">Reading here doesn’t change your plan or streak.</p>`;
 }
+
+function bookCell(b, read) {
+  const bk = META.books[b], n = bk.verses.length;
+  let done = 0; for (let c = 1; c <= n; c++) if (read.has(`${b}.${c}`)) done++;
+  return `<a class="book-cell" href="${bibleHref(b)}"><b>${esc(bk.name)}</b><span>${n} ch</span><i style="width:${Math.round((done / n) * 100)}%"></i></a>`;
+}
+
+// Books whose name (English, Tagalog, Cebuano) or short form matches what's typed:
+// names starting with it first, then names containing it, in Bible order.
+function matchBooks(q) {
+  const part = (q || '').trim().replace(/\s*\d+\s*(?:[:.,]\s*\d*)?\s*$/, '');
+  let n = normName(part);
+  if (!n) return null;
+  const num = n.match(/^[1-3]/)?.[0] || '';
+  const ab = BOOK_ABBR[n] ? BOOK_ABBR[n] : BOOK_ABBR[n.slice(num.length)] ? num + BOOK_ABBR[n.slice(num.length)] : '';
+  const idx = bookIndexCache || META.books.map((b, i) => [normName(b.name), i]);
+  const starts = new Set(), has = new Set();
+  for (const [k, i] of idx) {
+    if (k.startsWith(n) || (ab && k.startsWith(ab))) starts.add(i);
+    else if (n.length >= 3 && k.includes(n)) has.add(i);
+  }
+  return [...[...starts].sort((a, b) => a - b), ...[...has].filter((i) => !starts.has(i)).sort((a, b) => a - b)];
+}
+
+// Filters the book list as you type (no need to press Go)
+function filterBible(q) {
+  const grid = document.getElementById('book-grid');
+  if (!grid) return;
+  const err = document.getElementById('goto-err'); if (err) err.hidden = true;
+  const typing = !!q.trim();
+  document.querySelector('.seg-ctl.tst')?.toggleAttribute('hidden', typing);
+  document.querySelector('.cont-read')?.toggleAttribute('hidden', typing);
+  const read = planReadChapters();
+  const hitEl = document.getElementById('goto-hit');
+  if (!typing) {
+    const [from, to] = bibleTestament === 'ot' ? [0, 38] : [39, 65];
+    grid.innerHTML = META.books.slice(from, to + 1).map((_, j) => bookCell(from + j, read)).join('');
+    if (hitEl) hitEl.innerHTML = '';
+    return;
+  }
+  if (!bookIndexCache) loadBookNames().then((ok) => { if (ok) filterBible(document.getElementById('goto')?.value || ''); }).catch(() => {});
+  const books = matchBooks(q) || [];
+  const hit = /\d/.test(q) ? parseRef(q) : null;
+  if (hitEl) hitEl.innerHTML = hit && hit.c ? `<a class="banner goto-hit" href="${bibleHref(hit.b, hit.c, hit.v)}">
+      <div class="t"><b>Open ${esc(META.books[hit.b].name)} ${hit.c}${hit.v ? `:${hit.v}` : ''}</b><span class="muted">${esc(currentTranslation())}</span></div>
+      <div class="icon-btn">${icon('arrow')}</div></a>` : '';
+  grid.innerHTML = books.length ? books.map((b) => bookCell(b, read)).join('')
+    : `<p class="help" style="grid-column:1/-1;text-align:center">No book matches “${esc(q.trim())}”.</p>`;
+}
+document.addEventListener('input', (e) => { if (e.target.id === 'goto') filterBible(e.target.value); });
 
 function viewBibleBook(b) {
   const bk = META.books[b];
@@ -1539,7 +1586,7 @@ function viewWelcome() {
         <input class="field" style="margin:0" id="wstart" type="date" value="${t}" hidden>
         <div class="welcome-opt">
           <div class="t"><b>🗓️ Planner <small>optional</small></b><span>Plan your week and month around your daily readings: to-dos, goals, your routine and birthdays. You can change this later in Settings.</span></div>
-          <button class="switch" id="wplanner" data-action="wplanner" role="switch" aria-checked="false" aria-label="Turn on the planner"></button>
+          <button class="switch on" id="wplanner" data-action="wplanner" role="switch" aria-checked="true" aria-label="Turn on the planner"></button>
         </div>
         <button class="btn primary block" data-action="begin" style="margin-top:8px">${icon('flame').replace('<svg', '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"')} Light the lamp</button>
         <button class="restore-link" data-action="import">Coming from another phone? <b>Restore a backup</b></button>

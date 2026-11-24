@@ -2,7 +2,7 @@
 // storage clears) and localStorage in a plain browser.
 import { today, addDays, diffDays } from './plan.js';
 
-export const DEFAULT_PLANNER = () => ({ on: false, from: 7, to: 21, bdayNotif: true, items: [], goals: [], birthdays: [],
+export const DEFAULT_PLANNER = () => ({ on: true, from: 7, to: 21, bdayNotif: true, items: [], goals: [], birthdays: [],
   dayNotes: [], monthGoals: [], monthly: [], routine: { blocks: [], days: [0, 1, 2, 3, 4], show: true, week: ['', '', '', '', '', '', ''] } });
 
 const KEY = 'lamp.state.v1';
@@ -41,6 +41,7 @@ const DEFAULTS = () => ({
   planner: DEFAULT_PLANNER(),
   // Notebook: sermon notes, devotions, letters to God (sync-ready records)
   notebook: [],
+  plannerShownByDefault: true,
 });
 
 export const state = DEFAULTS();
@@ -56,6 +57,9 @@ export async function load() {
 
 // Fills in anything missing (older saves, backups) with defaults
 export function normalize(s) {
+  // The Planner tab is shown by default. Readers from before that change get it
+  // switched on once; after that their own choice in Settings stands.
+  if (s && !s.plannerShownByDefault) { s.planner = { ...(s.planner || {}), on: true }; s.plannerShownByDefault = true; }
   const d = DEFAULTS();
   return Object.assign(d, s, {
     done: { ...d.done, ...(s.done || {}) },
