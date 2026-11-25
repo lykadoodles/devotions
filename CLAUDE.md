@@ -6,6 +6,7 @@ GitHub `lykadoodles/devotions`. Package `com.lykadoodles.lamp`. Live on Google P
 purchases; everything stays on the phone and works offline.
 
 Read this first, then README.md (features and translations) and store/LISTING.md (Play listing).
+For anything visual or social media: **brand/BRAND.md** (logo, colours, fonts, voice, post formats).
 
 ## How the app is built
 
