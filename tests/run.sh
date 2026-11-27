@@ -8,7 +8,8 @@ set -u
 cd "$(dirname "$0")/.."
 mkdir -p tests/out
 if ! curl -s -o /dev/null localhost:8080/; then
-  (cd www && python3 -m http.server 8080 >/dev/null 2>&1 &)
+  # fully detached, so it doesn't hold this script's output open
+  (cd www && setsid nohup python3 -m http.server 8080 >/dev/null 2>&1 </dev/null &)
   sleep 1
 fi
 fail=0

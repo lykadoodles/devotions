@@ -1510,6 +1510,7 @@ function viewSettings() {
           <button class="switch ${state.rhemaNotif?.on ? 'on' : ''}" data-action="rhema-notif" aria-label="Toggle verse of the day"></button></div>
         <div class="item"><div class="t"><b>Verse time</b></div><input type="time" id="rvtime" value="${state.rhemaNotif?.time || '07:00'}"></div>
       </div>
+      ${state.reminder.on || state.rhemaNotif?.on ? `<p class="help" style="margin:8px 4px 0">Not getting reminders? Some phones stop apps in the background. In your phone’s Settings → Apps → Lamp → Battery, choose <b>No restrictions</b> (or turn on <b>Autostart</b>), then open Lamp once.</p>` : ''}
     </div>
 
     <div class="section">
@@ -1615,7 +1616,7 @@ async function scheduleReminders() {
           id: 1000 + i,
           title: n >= 1 && n <= DAYS ? `Day ${n} · your lamp is waiting` : 'Your daily Proverb is waiting',
           body: rs.map((r) => label(r.range)).join(' · '),
-          schedule: { at, allowWhileIdle: true },
+          schedule: { at, allowWhileIdle: true }, isExactNotification: false,
           extra: { route: '#/today' },
         });
       }
@@ -1636,7 +1637,7 @@ async function scheduleReminders() {
           title: 'Verse of the day ✨',
           body: `“${short}” ${ref}`,
           largeBody: `“${text}”\n${ref} · ${res.translation}`,
-          schedule: { at, allowWhileIdle: true },
+          schedule: { at, allowWhileIdle: true }, isExactNotification: false,
           extra: { route: '#/today', rhema: true },
         });
       }
@@ -1644,7 +1645,7 @@ async function scheduleReminders() {
     Planner.birthdayNotifications(30).forEach((bd, i) => {
       const at = atTime(bd.date, '08:00');
       if (at <= new Date()) return;
-      list.push({ id: 3000 + i, title: bd.title, body: bd.body, schedule: { at, allowWhileIdle: true }, extra: { route: `#/planner/bday/${bd.id}` } });
+      list.push({ id: 3000 + i, title: bd.title, body: bd.body, schedule: { at, allowWhileIdle: true }, isExactNotification: false, extra: { route: `#/planner/bday/${bd.id}` } });
     });
     if (list.length) await LN.schedule({ notifications: list });
   } catch (e) { console.warn('reminders', e); }

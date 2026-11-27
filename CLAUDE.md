@@ -86,7 +86,9 @@ tests/run.sh                 # all
 tests/run.sh bible-tab       # one
 ```
 
-Each prints what it checked and ends with `errors []`. Screenshots go to `tests/out/`
+Each prints what it checked and ends with `errors []`. In a Claude session, start the server
+yourself first (`cd www && python3 -m http.server 8080`, in the background) and run the tests
+with `node tests/<name>.test.js`; piping `tests/run.sh` through `tail` can hang on the server. Screenshots go to `tests/out/`
 (gitignored). Look at the screenshots for any UI change. Lint for undefined variables with
 eslint (`no-undef`) before building; a stray variable once crashed the Catch up screen.
 
@@ -101,6 +103,10 @@ eslint (`no-undef`) before building; a stray variable once crashed the Catch up 
 - Reading in the Bible tab never changes the plan or streak.
 - Notebook images sit in a gallery under the text (inline images would need a rich editor).
 - Dark theme has no stripe texture. Reading page colours: Blue, Dark, Light, Sepia.
+- **No exact alarms.** Reminders are scheduled with `isExactNotification: false`; the
+  SCHEDULE_EXACT_ALARM permission is removed in the workflow. Without the flag, the
+  local-notifications plugin (8.x) opens Android's "Alarms & reminders" page, whose switch is
+  greyed out for Lamp, so reminders broke (Nov 2026).
 - Keep it simple, practical and fast to ship; small, tested builds.
 - Testers write in Taglish; replies for the testers' group chat are usually in Taglish.
 
